@@ -98,6 +98,9 @@ export interface ResourceConfig {
   defaultDescending: boolean;
   /** Django-style list_display: reorder, add, or remove descriptors here. */
   listDisplay: ResourceColumn[];
+  /** Optional Django-style detail field order; unspecified record fields follow it. */
+  detailDisplay?: string[];
+  /** Django-style editable field list used by create and change forms. */
   fields: ResourceField[];
   searchFields: SelectOption[];
   filters: ResourceFilter[];

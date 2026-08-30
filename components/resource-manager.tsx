@@ -7,31 +7,28 @@ import {
   ApiError,
   createResource,
   deleteResource,
-  getResourceRecord,
   listResource,
-  updateResource,
 } from "../lib/api";
 import { getResourceConfig } from "../lib/resources";
-import type { JsonObject, JsonValue, ResourceKey, ResourceRecord } from "../lib/types";
+import type { JsonObject, ResourceKey, ResourceRecord } from "../lib/types";
 import { ConfirmDialog } from "./confirm-dialog";
 import { DataTable } from "./data-table";
 import {
   AlertIcon,
   CloseIcon,
   DeleteIcon,
-  EditIcon,
   PlusIcon,
   RefreshIcon,
   SearchIcon,
 } from "./icons";
+import { recordLabel } from "./record-detail";
 import { RecordForm } from "./record-form";
 import { ToastViewport, useToast } from "./toast";
 import { useDialogFocus } from "./use-dialog-focus";
 
 type DrawerState =
   | { mode: "closed" }
-  | { mode: "create" }
-  | { mode: "detail" | "edit"; record: ResourceRecord };
+  | { mode: "create" };
 
 interface DeleteRequest {
   ids: string[];
@@ -55,13 +52,6 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "An unexpected error occurred.";
 }
 
-function recordLabel(record: ResourceRecord, primaryKey: string): string {
-  for (const key of ["email", "name", "tier", "key_hint", "confirmation_code", "value", "job_id"]) {
-    if (record[key]) return String(record[key]);
-  }
-  return String(record[primaryKey] ?? "this record");
-}
-
 function firstSecret(payload: JsonObject, fields: string[]): string | null {
   for (const field of fields) {
     if (typeof payload[field] === "string") return payload[field] as string;
@@ -74,35 +64,6 @@ function firstSecret(payload: JsonObject, fields: string[]): string | null {
     }
   }
   return null;
-}
-
-function detailValue(value: JsonValue | undefined) {
-  if (value === undefined || value === null || value === "") return <span className="empty-value">—</span>;
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "object") return <pre className="detail-json">{JSON.stringify(value, null, 2)}</pre>;
-  return <span className="detail-text">{String(value)}</span>;
-}
-
-interface RecordDetailProps {
-  record: ResourceRecord;
-  preferredFields: string[];
-}
-
-function RecordDetail({ record, preferredFields }: RecordDetailProps) {
-  const keys = [
-    ...preferredFields.filter((field) => record[field] !== undefined),
-    ...Object.keys(record).filter((field) => !preferredFields.includes(field)),
-  ];
-  return (
-    <dl className="record-detail">
-      {keys.map((key) => (
-        <div className="detail-row" key={key}>
-          <dt>{key.replaceAll("_", " ")}</dt>
-          <dd>{detailValue(record[key])}</dd>
-        </div>
-      ))}
-    </dl>
-  );
 }
 
 interface SecretDialogProps {
@@ -309,40 +270,24 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
     });
   };
 
-  const openDetail = async (record: ResourceRecord) => {
-    setDrawer({ mode: "detail", record });
+  const openRecord = (record: ResourceRecord, mode: "view" | "edit") => {
     const id = String(record[config.primaryKey] ?? "");
     if (!id) return;
-    try {
-      const response = await getResourceRecord(resourceKey, id);
-      setDrawer((current) =>
-        current.mode === "detail" && String(current.record[config.primaryKey]) === id
-          ? { mode: "detail", record: response.row }
-          : current,
-      );
-    } catch (error) {
-      pushToast(getErrorMessage(error), "error");
-    }
+    const recordPath = `${pathname}/${encodeURIComponent(id)}`;
+    router.push(mode === "edit" ? `${recordPath}/edit` : recordPath);
   };
 
   const submitRecord = async (payload: JsonObject) => {
     setSubmitting(true);
     try {
-      if (drawer.mode === "create") {
-        const response = await createResource(config, payload);
-        const createdSecret = firstSecret(response, config.secretResponseFields ?? []);
-        if (createdSecret) {
-          setSecret(createdSecret);
-          setSecretCopied(false);
-        }
-        pushToast(`${config.labelSingular} created.`, "success");
-      } else if (drawer.mode === "edit") {
-        const id = String(drawer.record[config.primaryKey] ?? "");
-        await updateResource(config, id, payload);
-        pushToast(`${config.labelSingular} updated.`, "success");
-      } else {
-        return;
+      if (drawer.mode !== "create") return;
+      const response = await createResource(config, payload);
+      const createdSecret = firstSecret(response, config.secretResponseFields ?? []);
+      if (createdSecret) {
+        setSecret(createdSecret);
+        setSecretCopied(false);
       }
+      pushToast(`${config.labelSingular} created.`, "success");
       setDrawer({ mode: "closed" });
       refresh();
     } catch (error) {
@@ -379,10 +324,6 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
       );
     }
     setSelectedIds((current) => current.filter((id) => !deleteRequest.ids.includes(id)));
-    if (drawer.mode !== "closed" && "record" in drawer) {
-      const drawerId = String(drawer.record[config.primaryKey] ?? "");
-      if (deleteRequest.ids.includes(drawerId)) setDrawer({ mode: "closed" });
-    }
     setDeleteRequest(null);
     setDeleting(false);
     if (succeeded > 0) refresh();
@@ -391,12 +332,6 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const firstRow = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const lastRow = Math.min(page * pageSize, total);
-  const preferredDetailFields = [
-    config.primaryKey,
-    ...config.listDisplay.map((column) => column.name),
-    ...config.fields.map((field) => field.name),
-  ];
-
   return (
     <div className="resource-manager">
       <div
@@ -549,10 +484,10 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
           descending={descending}
           loading={loading}
           onDelete={requestRowDelete}
-          onEdit={(record) => setDrawer({ mode: "edit", record })}
+          onEdit={(record) => openRecord(record, "edit")}
           onSelectionChange={setSelectedIds}
           onSort={sort}
-          onView={openDetail}
+          onView={(record) => openRecord(record, "view")}
           orderBy={orderBy}
           primaryKey={config.primaryKey}
           rows={rows}
@@ -621,13 +556,7 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
             <div className="drawer-header">
               <div>
                 <p className="resource-eyebrow">{config.label}</p>
-                <h2 id="record-drawer-title">
-                  {drawer.mode === "create"
-                    ? `Add ${config.labelSingular}`
-                    : drawer.mode === "edit"
-                      ? `Edit ${config.labelSingular}`
-                      : recordLabel(drawer.record, config.primaryKey)}
-                </h2>
+                <h2 id="record-drawer-title">Add {config.labelSingular}</h2>
               </div>
               <button
                 aria-label="Close drawer"
@@ -640,43 +569,14 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
               </button>
             </div>
             <div className="drawer-body">
-              {drawer.mode === "detail" ? (
-                <>
-                  <div className="detail-actions">
-                    {config.canEdit ? (
-                      <button
-                        className="button button--secondary"
-                        onClick={() => setDrawer({ mode: "edit", record: drawer.record })}
-                        type="button"
-                      >
-                        <EditIcon size={15} />
-                        Edit
-                      </button>
-                    ) : null}
-                    {config.canDelete ? (
-                      <button className="button button--danger" onClick={() => requestRowDelete(drawer.record)} type="button">
-                        <DeleteIcon size={15} />
-                        Delete
-                      </button>
-                    ) : null}
-                  </div>
-                  <RecordDetail preferredFields={preferredDetailFields} record={drawer.record} />
-                </>
-              ) : (
-                <RecordForm
-                  config={config}
-                  initialRecord={drawer.mode === "edit" ? drawer.record : undefined}
-                  key={
-                    drawer.mode === "edit"
-                      ? `edit-${String(drawer.record[config.primaryKey])}`
-                      : `create-${resourceKey}`
-                  }
-                  mode={drawer.mode}
-                  onCancel={() => setDrawer({ mode: "closed" })}
-                  onSubmit={submitRecord}
-                  submitting={submitting}
-                />
-              )}
+              <RecordForm
+                config={config}
+                key={`create-${resourceKey}`}
+                mode="create"
+                onCancel={() => setDrawer({ mode: "closed" })}
+                onSubmit={submitRecord}
+                submitting={submitting}
+              />
             </div>
           </aside>
         </div>

@@ -21,7 +21,7 @@ The FastAPI project uses port `3001`, so the admin frontend runs on port `3000`.
 
 1. Copy `.env.example` to `.env.local` and adjust the backend origin if needed.
 2. Install dependencies with `npm install`.
-3. Start FastAPI from `backend/` on `http://localhost:3001`.
+3. Start FastAPI from `backend/` on `http://localhost:8000`.
 4. Run `npm run dev` from this directory.
 5. Open `http://localhost:3000`.
 
@@ -94,6 +94,21 @@ listDisplay: [
 
 Related labels are intentionally not sortable: sorting `user_id` would order UUIDs while the
 screen appears to show names. Add an explicit related-name sort to FastAPI before enabling it.
+
+## Customizing record pages
+
+List rows open dedicated record pages instead of overlay drawers:
+
+```text
+/<resource>/<record-id>       read-only record view
+/<resource>/<record-id>/edit  configurable change form
+```
+
+The `fields` array in `lib/resources.ts` is the Django-style editable field list used by create and
+change forms. Reorder, add, or remove entries there to customize a resource form. An optional
+`detailDisplay` string array controls the preferred order on the read-only page; any other safe
+fields returned by FastAPI follow it. Detail field names are deduplicated automatically when they
+also appear in `listDisplay` or `fields`.
 
 ## Commands
 

@@ -2298,6 +2298,338 @@ button:disabled {
   }
 }
 
+/* Full record change/view pages — Django Unfold-style administration flow. */
+.record-page {
+  margin: 0 auto;
+  max-width: 1320px;
+}
+
+.record-page-breadcrumbs {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 10px;
+  gap: 7px;
+  margin-bottom: 15px;
+  min-width: 0;
+}
+
+.record-page-breadcrumbs a {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.record-page-breadcrumbs a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.record-page-breadcrumbs svg {
+  color: var(--sidebar-muted);
+  flex: 0 0 auto;
+}
+
+.record-page-breadcrumbs span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-page-header {
+  align-items: center;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.record-page-header h1 {
+  font-size: 25px;
+  font-weight: 720;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+  margin: 5px 0 5px;
+  overflow-wrap: anywhere;
+}
+
+.record-page-header > div:first-child > p:last-child {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 720px;
+}
+
+.record-page-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.record-summary {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(155px, 0.7fr));
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.record-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 13px 16px;
+}
+
+.record-summary > div + div {
+  border-left: 1px solid var(--border);
+}
+
+.record-summary span {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.record-summary strong,
+.record-summary code {
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 620;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-summary code {
+  font-family: var(--font-space-mono), ui-monospace, monospace;
+}
+
+.record-page-panel {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+  overflow: clip;
+}
+
+.record-page-panel-header {
+  align-items: center;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  min-height: 67px;
+  padding: 14px 20px;
+}
+
+.record-page-panel-header h2 {
+  font-size: 13px;
+  font-weight: 720;
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.record-page-panel-header p {
+  color: var(--muted);
+  font-size: 9px;
+  margin: 3px 0 0;
+}
+
+.record-loading-label {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.record-page-panel-body {
+  padding: 24px;
+}
+
+.record-page .record-detail {
+  border-color: var(--border);
+}
+
+.record-page .detail-row {
+  grid-template-columns: minmax(170px, 0.28fr) minmax(0, 1fr);
+}
+
+.record-page .detail-row dt,
+.record-page .detail-row dd {
+  padding: 12px 14px;
+}
+
+.record-page .detail-row dt {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.record-page .detail-row dd {
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.record-page .form-grid {
+  gap: 20px 22px;
+}
+
+.record-page .form-field input:not([type="checkbox"]),
+.record-page .form-field select {
+  min-height: 42px;
+}
+
+.record-page .checkbox-field {
+  min-height: 42px;
+}
+
+.record-page .drawer-actions {
+  backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.94);
+  bottom: 0;
+  box-shadow: 0 -9px 22px rgba(10, 10, 10, 0.035);
+  margin: 32px -24px -24px;
+  padding: 14px 24px;
+  position: sticky;
+  z-index: 5;
+}
+
+.record-message {
+  align-items: flex-start;
+  border-bottom: 1px solid transparent;
+  display: flex;
+  font-size: 10px;
+  gap: 9px;
+  padding: 11px 20px;
+}
+
+.record-message > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.record-message strong {
+  font-size: 10px;
+}
+
+.record-message--error {
+  background: var(--danger-soft);
+  border-color: rgba(252, 121, 129, 0.3);
+  color: var(--danger);
+}
+
+.record-message--success {
+  background: var(--success-soft);
+  border-color: rgba(7, 138, 82, 0.2);
+  color: var(--success);
+}
+
+.record-load-error {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  min-height: 330px;
+  padding: 52px 24px;
+  text-align: center;
+}
+
+.record-load-error h2 {
+  font-size: 17px;
+  margin: 5px 0 5px;
+}
+
+.record-load-error p {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+  margin: 0 0 18px;
+  max-width: 520px;
+}
+
+.record-page-skeleton {
+  display: grid;
+  gap: 18px 22px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 330px;
+  padding: 28px 24px;
+}
+
+.record-page-skeleton .skeleton-block {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  background: linear-gradient(90deg, #eee9df, #faf9f7, #eee9df);
+  background-size: 200% 100%;
+  border-radius: 8px;
+  display: block;
+  height: 42px;
+  max-width: none;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .record-page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .record-page-actions {
+    justify-content: flex-start;
+  }
+
+  .record-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .record-summary > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 700px) {
+  .record-page-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .record-page-actions .button {
+    width: 100%;
+  }
+
+  .record-page-panel-body {
+    padding: 18px 15px;
+  }
+
+  .record-page .detail-row {
+    grid-template-columns: 1fr;
+  }
+
+  .record-page .drawer-actions {
+    margin: 26px -15px -18px;
+    padding: 12px 15px;
+  }
+
+  .record-page-skeleton {
+    grid-template-columns: 1fr;
+    padding: 22px 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .record-page-skeleton .skeleton-block {
+    animation: none;
+  }
+}
+
 /* ================================================================
    Gathos × Unfold
    Unfold's dense administration layout, skinned with Gathos Clay.

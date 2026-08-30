@@ -112,6 +112,9 @@ export function AdminShell({ children, email }: { children: ReactNode; email?: s
   const [logoutError, setLogoutError] = useState("");
 
   const currentItem = NAV_ITEMS.find((item) => isActivePath(pathname, item.href));
+  const nestedRecordPage = Boolean(
+    currentItem && currentItem.href !== "/" && pathname !== currentItem.href,
+  );
   const normalizedQuery = query.trim().toLowerCase();
   const matches = normalizedQuery
     ? NAV_ITEMS.filter((item) =>
@@ -239,14 +242,6 @@ export function AdminShell({ children, email }: { children: ReactNode; email?: s
           })}
         </nav>
 
-        <div className="sidebar-status">
-          <span className="sidebar-status-label">
-            <span className="sidebar-status-dot" />
-            Protected console
-          </span>
-          <small>FastAPI admin API</small>
-        </div>
-
         <div className="sidebar-footer">
           <div className="sidebar-user">
             <span className="user-avatar">{identity.charAt(0).toUpperCase()}</span>
@@ -297,7 +292,15 @@ export function AdminShell({ children, email }: { children: ReactNode; email?: s
             <nav aria-label="Breadcrumb" className="topbar-breadcrumbs">
               <Link href="/">Administration</Link>
               <ChevronRightIcon />
-              <strong>{currentItem?.label || "Dashboard"}</strong>
+              {nestedRecordPage && currentItem ? (
+                <>
+                  <Link href={currentItem.href}>{currentItem.label}</Link>
+                  <ChevronRightIcon />
+                  <strong>{pathname.endsWith("/edit") ? "Edit record" : "View record"}</strong>
+                </>
+              ) : (
+                <strong>{currentItem?.label || "Dashboard"}</strong>
+              )}
             </nav>
           </div>
 
