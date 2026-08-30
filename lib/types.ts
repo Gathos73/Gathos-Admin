@@ -1,0 +1,143 @@
+export type ResourceKey =
+  | "users"
+  | "api_keys"
+  | "tier_defaults"
+  | "security_blocklist"
+  | "meta_deletion_requests"
+  | "newsletter_subscribers"
+  | "affiliates"
+  | "generations";
+
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
+export type JsonObject = { [key: string]: JsonValue | undefined };
+export type ResourceRecord = JsonObject;
+
+export type FieldKind =
+  | "text"
+  | "email"
+  | "number"
+  | "boolean"
+  | "select"
+  | "textarea"
+  | "json"
+  | "datetime";
+
+export interface SelectOption {
+  label: string;
+  value: string;
+}
+
+export interface ResourceField {
+  name: string;
+  label: string;
+  kind: FieldKind;
+  required?: boolean;
+  nullable?: boolean;
+  createOnly?: boolean;
+  editOnly?: boolean;
+  immutableOnEdit?: boolean;
+  placeholder?: string;
+  help?: string;
+  min?: number;
+  step?: number;
+  jsonObject?: boolean;
+  defaultValue?: JsonPrimitive | JsonObject | JsonValue[];
+  options?: SelectOption[];
+}
+
+export type ColumnKind =
+  | "text"
+  | "identifier"
+  | "number"
+  | "boolean"
+  | "status"
+  | "date"
+  | "json";
+
+export interface ResourceColumn {
+  /** Physical row field used as this column's stable key and sort field. */
+  name: string;
+  label: string;
+  kind?: ColumnKind;
+  sortable?: boolean;
+  /**
+   * Optional read-only presentation override. Paths may traverse embedded API
+   * objects, for example `user.name`. The physical field remains available to
+   * forms, mutations, filters, and fallback display.
+   */
+  display?: {
+    primaryPath: string;
+    fallbackPaths?: string[];
+    secondaryPath?: string;
+  };
+}
+
+export interface ResourceFilter {
+  name: string;
+  label: string;
+  options?: SelectOption[];
+}
+
+export type HttpMethod = "POST" | "PUT" | "PATCH" | "DELETE";
+
+export interface ResourceMutationConfig {
+  basePath: string;
+  createMethod?: HttpMethod;
+  updateMethod?: HttpMethod;
+  deleteMethod?: HttpMethod;
+}
+
+export interface ResourceConfig {
+  key: ResourceKey;
+  label: string;
+  labelSingular: string;
+  description: string;
+  primaryKey: string;
+  defaultOrder: string;
+  defaultDescending: boolean;
+  /** Django-style list_display: reorder, add, or remove descriptors here. */
+  listDisplay: ResourceColumn[];
+  fields: ResourceField[];
+  searchFields: SelectOption[];
+  filters: ResourceFilter[];
+  mutations: ResourceMutationConfig;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  canBulkDelete: boolean;
+  secretResponseFields?: string[];
+}
+
+export interface ResourceQuery {
+  page: number;
+  pageSize: number;
+  orderBy: string;
+  descending: boolean;
+  search?: string;
+  searchField?: string;
+  filterBy?: string;
+  filterValue?: string;
+}
+
+export interface ResourceListResponse {
+  table: ResourceKey;
+  rows: ResourceRecord[];
+  pagination: {
+    page: number;
+    page_size: number;
+    total: number;
+    has_more: boolean;
+  };
+}
+
+export interface ResourceRecordResponse {
+  table: ResourceKey;
+  row: ResourceRecord;
+}
+
+export interface ToastItem {
+  id: number;
+  message: string;
+  tone: "success" | "error" | "info";
+}
