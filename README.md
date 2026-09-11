@@ -8,7 +8,6 @@ behind the existing FastAPI admin authorization checks.
 
 - Users
 - API keys
-- Tier defaults
 - Security blocklist entries
 - Meta deletion requests
 - Newsletter subscribers
@@ -17,7 +16,7 @@ behind the existing FastAPI admin authorization checks.
 
 ## Local development
 
-The FastAPI project uses port `3001`, so the admin frontend runs on port `3000`.
+The FastAPI project uses port `8000`, so the admin frontend runs on port `3000`.
 
 1. Copy `.env.example` to `.env.local` and adjust the backend origin if needed.
 2. Install dependencies with `npm install`.
@@ -42,16 +41,18 @@ BACKEND_URL=https://backend.gathos.com
 
 ## Authentication and API flow
 
-The protected route-group layout forwards the incoming cookie header to
+The protected route-group layout rejects missing sessions locally. When server-only
+`SESSION_SECRET` matches FastAPI, it also verifies signatures and expiry locally.
+Valid sessions still forward the session cookie to
 `GET /api/admin/check`. Access fails closed unless FastAPI returns `isAdmin: true`; there is no
 frontend or development bypass.
 
 The Admin login is separate from the landing and dashboard login screens. It offers email and
 password only and submits to FastAPI's dedicated `POST /api/admin/login` through the same-origin
-BFF. FastAPI verifies the password, current account state, and admin allowlist before issuing a
-time-limited `gathos_session` cookie. The Admin then calls `GET /api/admin/check`: approved
-administrators continue to the requested Admin page, while signed-in accounts without permission
-remain on the login page and are prompted to sign out and use another account.
+BFF. FastAPI verifies the password, current account state, and admin role before issuing a
+time-limited `gathos_session` cookie. The browser then navigates directly to the requested Admin page, where the layout
+checks current permission. Login no longer makes a duplicate browser-side check.
+Admin permissions are never cached.
 
 Browser-side requests use the same-origin endpoint:
 
@@ -63,8 +64,8 @@ The catch-all route forwards the method, query string, request body, cookies, re
 response body, and `Set-Cookie` headers. For example:
 
 ```text
-GET /api/backend/api/admin/data/users?page=1&page_size=25
-    → http://localhost:3001/api/admin/data/users?page=1&page_size=25
+GET /api/backend/api/admin/resources/users?page=1&page_size=25
+    → http://localhost:8000/api/admin/resources/users?page=1&page_size=25
 ```
 
 For safety, the BFF exposes only `/api/admin/*` and `/api/auth/logout`. FastAPI remains the source
@@ -119,3 +120,23 @@ npm run start      # Serve the production build on port 3000
 npm run lint       # ESLint with Next.js Core Web Vitals rules
 npm run typecheck  # TypeScript without emitting files
 ```
+
+## Catalog management
+
+Products, product routes, plans, and plan limits are managed through the catalog
+sections and `/api/admin/catalog/*`. Apply backend migration
+`0006_live_plan_management` before deploying these controls.
+
+Editing an active plan or its allowance updates the existing plan in place and
+affects every user assigned to it. Zero blocks the measured usage; an absent
+rule imposes no limit for that metric and window. Used rules retain their metric,
+window, and scope to preserve usage accounting; add a separate rule to change
+those semantics.
+
+For an individual exception, create a plan with a unique code and Public disabled,
+configure its products and limits, then select it in the user's Plan field.
+Existing provider subscriptions can retain their billing when assigned a private
+plan; granting paid access without a subscription requires the comped setting.
+
+`SESSION_SECRET` is optional for rollout: unset deployments retain backend verification.
+Keep it server-only; configuring it gives this server signing capability as well as verification.

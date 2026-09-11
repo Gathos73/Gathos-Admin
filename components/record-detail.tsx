@@ -22,7 +22,7 @@ function humanize(value: string): string {
 }
 
 export function recordLabel(record: ResourceRecord, primaryKey: string): string {
-  for (const key of ["email", "name", "tier", "key_hint", "confirmation_code", "value", "job_id"]) {
+  for (const key of ["product_name", "email", "name", "display_name", "code", "route_code", "tier", "key_hint", "confirmation_code", "value", "job_id"]) {
     if (record[key]) return String(record[key]);
   }
   return String(record[primaryKey] ?? "Record");
@@ -50,12 +50,25 @@ export function RecordDetail({
 
   return (
     <dl className="record-detail">
-      {keys.map((key) => (
-        <div className="detail-row" key={key}>
-          <dt>{labels.get(key) ?? humanize(key)}</dt>
-          <dd>{detailValue(record[key])}</dd>
-        </div>
-      ))}
+      {keys.map((key) => {
+        let valueElement = detailValue(record[key]);
+        if (key === "product_id" && record.product_name) {
+          valueElement = (
+            <span className="detail-text">
+              {String(record.product_name)}
+              {record.product_code ? <span style={{ opacity: 0.7 }}> ({String(record.product_code)})</span> : null}
+            </span>
+          );
+        } else if (key === "plan_id" && record.plan_name) {
+          valueElement = <span className="detail-text">{String(record.plan_name)}</span>;
+        }
+        return (
+          <div className="detail-row" key={key}>
+            <dt>{labels.get(key) ?? humanize(key)}</dt>
+            <dd>{valueElement}</dd>
+          </div>
+        );
+      })}
     </dl>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { clearRequestCache } from "@/lib/request-cache";
+
 import { useState } from "react";
 
 export function AccountSwitchButton({ returnPath }: { returnPath: string }) {
@@ -10,6 +12,7 @@ export function AccountSwitchButton({ returnPath }: { returnPath: string }) {
     setSubmitting(true);
     setError("");
     try {
+      clearRequestCache();
       const response = await fetch("/api/backend/api/auth/logout", {
         credentials: "same-origin",
         method: "POST",

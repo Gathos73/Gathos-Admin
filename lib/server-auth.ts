@@ -4,6 +4,8 @@ import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { verifySession } from "@/lib/session-token";
+
 type AdminCheckPayload = {
   authenticated?: boolean;
   email?: string;
@@ -17,7 +19,7 @@ export type AdminAccess =
   | { status: "unavailable" };
 
 export function getBackendUrl(): string {
-  return (process.env.BACKEND_URL || "http://localhost:3001").replace(/\/+$/, "");
+  return (process.env.BACKEND_URL || "http://localhost:8000").replace(/\/+$/, "");
 }
 
 export async function getForwardedCookieHeader(): Promise<string> {
@@ -25,7 +27,12 @@ export async function getForwardedCookieHeader(): Promise<string> {
 }
 
 export const getAdminAccess = cache(async (): Promise<AdminAccess> => {
-  const cookieHeader = await getForwardedCookieHeader();
+  const token = (await cookies()).get("gathos_session")?.value;
+  if (!token) return { status: "unauthenticated" };
+  if (process.env.SESSION_SECRET && !verifySession(token, process.env.SESSION_SECRET)) {
+    return { status: "unauthenticated" };
+  }
+  const cookieHeader = `gathos_session=${encodeURIComponent(token)}`;
 
   try {
     const response = await fetch(`${getBackendUrl()}/api/admin/check`, {

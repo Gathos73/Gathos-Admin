@@ -13,13 +13,17 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     "/",
+    "/products/:path*",
+    "/product-routes/:path*",
+    "/plans/:path*",
+    "/plan-limits/:path*",
     "/users/:path*",
     "/api-keys/:path*",
-    "/tier-defaults/:path*",
     "/security-blocklist/:path*",
     "/meta-deletion-requests/:path*",
     "/newsletter-subscribers/:path*",
     "/affiliates/:path*",
     "/generations/:path*",
+    "/priority-support/:path*",
   ],
 };

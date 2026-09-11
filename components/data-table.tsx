@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import Link from "next/link";
 
 import type { JsonValue, ResourceColumn, ResourceRecord } from "../lib/types";
 import { DeleteIcon, EditIcon, MoreIcon } from "./icons";
@@ -71,7 +72,7 @@ function SelectAllCheckbox({ checked, indeterminate, onChange }: SelectAllCheckb
 
 function formatValue(value: JsonValue | undefined, column: ResourceColumn) {
   if (value === undefined || value === null || value === "") {
-    return <span className="empty-value">—</span>;
+    return <span className="empty-value">{value === null ? column.nullLabel ?? "—" : "—"}</span>;
   }
 
   switch (column.kind) {
@@ -96,6 +97,20 @@ function formatValue(value: JsonValue | undefined, column: ResourceColumn) {
       return <code className="json-cell">{JSON.stringify(value)}</code>;
     case "identifier":
       return <code className="identifier-cell">{String(value)}</code>;
+    case "link": {
+      const text = String(value);
+      const href = (column.linkPrefix || "") + text;
+      return (
+        <Link
+          className="table-link"
+          href={href}
+          onClick={(event) => event.stopPropagation()}
+          style={{ color: "var(--accent, #a78bfa)", textDecoration: "none" }}
+        >
+          <code className="identifier-cell">{text.length > 12 ? `${text.slice(0, 8)}…` : text}</code>
+        </Link>
+      );
+    }
     default:
       return <span className="text-cell">{String(value)}</span>;
   }

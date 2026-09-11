@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, useMemo, useState } from "react";
+import { RelationField } from "./relation-field";
 
 import type {
   JsonObject,
@@ -25,7 +26,7 @@ function dateTimeLocalValue(value: JsonValue | undefined): string {
 function initialFieldValue(field: ResourceField, record?: ResourceRecord): FormValue {
   const value = record?.[field.name] ?? field.defaultValue;
   if (field.kind === "boolean") return Boolean(value);
-  if (field.kind === "json") {
+  if (field.kind === "json" || field.kind === "relations") {
     if (value === undefined || value === null) return "";
     return JSON.stringify(value, null, 2);
   }
@@ -55,7 +56,7 @@ function fieldPayloadValue(
     }
     return { value: number };
   }
-  if (field.kind === "json") {
+  if (field.kind === "json" || field.kind === "relations") {
     try {
       const parsed = JSON.parse(raw) as JsonValue;
       if (field.jsonObject && (!parsed || typeof parsed !== "object" || Array.isArray(parsed))) {
@@ -78,21 +79,25 @@ function fieldPayloadValue(
 }
 
 interface RecordFormProps {
+  children?: ReactNode;
   config: ResourceConfig;
   mode: FormMode;
   initialRecord?: ResourceRecord;
   submitting: boolean;
   onSubmit: (payload: JsonObject) => Promise<void>;
   onCancel: () => void;
+  onFieldValueChange?: (name: string, value: FormValue) => void;
 }
 
 export function RecordForm({
+  children,
   config,
   mode,
   initialRecord,
   submitting,
   onSubmit,
   onCancel,
+  onFieldValueChange,
 }: RecordFormProps) {
   const visibleFields = useMemo(
     () =>
@@ -107,6 +112,11 @@ export function RecordForm({
     ),
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const updateValue = (name: string, value: FormValue) => {
+    setValues((current) => ({ ...current, [name]: value }));
+    onFieldValueChange?.(name, value);
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -141,7 +151,12 @@ export function RecordForm({
       }
     }
 
-    if (mode === "edit" && Object.keys(payload).length === 0 && Object.keys(nextErrors).length === 0) {
+    if (
+      mode === "edit" &&
+      !children &&
+      Object.keys(payload).length === 0 &&
+      Object.keys(nextErrors).length === 0
+    ) {
       nextErrors.__form = "Make at least one change before saving.";
     }
     setErrors(nextErrors);
@@ -165,8 +180,10 @@ export function RecordForm({
             const disabled = mode === "edit" && field.immutableOnEdit;
             const describedBy = error ? errorId : field.help ? helpId : undefined;
 
+            const FieldWrapper = field.kind === "relations" ? "div" : "label";
+
             return (
-              <label
+              <FieldWrapper
                 className={`form-field form-field--${field.kind}${error ? " form-field--error" : ""}`}
                 key={field.name}
               >
@@ -177,7 +194,7 @@ export function RecordForm({
                       disabled={disabled}
                       name={field.name}
                       onChange={(event) =>
-                        setValues((current) => ({ ...current, [field.name]: event.target.checked }))
+                        updateValue(field.name, event.target.checked)
                       }
                       type="checkbox"
                     />
@@ -190,6 +207,11 @@ export function RecordForm({
                   </span>
                 )}
 
+                {field.kind === "relation" || field.kind === "relations" ? (
+                  <RelationField field={field} value={String(values[field.name] ?? "")} disabled={Boolean(disabled)}
+                    onChange={(value) => updateValue(field.name, value)} />
+                ) : null}
+
                 {field.kind === "select" ? (
                   <select
                     aria-describedby={describedBy}
@@ -197,7 +219,7 @@ export function RecordForm({
                     disabled={disabled}
                     name={field.name}
                     onChange={(event) =>
-                      setValues((current) => ({ ...current, [field.name]: event.target.value }))
+                      updateValue(field.name, event.target.value)
                     }
                     required={field.required}
                     value={String(values[field.name] ?? "")}
@@ -219,7 +241,7 @@ export function RecordForm({
                     disabled={disabled}
                     name={field.name}
                     onChange={(event) =>
-                      setValues((current) => ({ ...current, [field.name]: event.target.value }))
+                      updateValue(field.name, event.target.value)
                     }
                     placeholder={field.placeholder}
                     required={field.required}
@@ -236,7 +258,7 @@ export function RecordForm({
                     min={field.min}
                     name={field.name}
                     onChange={(event) =>
-                      setValues((current) => ({ ...current, [field.name]: event.target.value }))
+                      updateValue(field.name, event.target.value)
                     }
                     placeholder={field.placeholder}
                     required={field.required}
@@ -256,11 +278,12 @@ export function RecordForm({
                     {error}
                   </span>
                 ) : null}
-              </label>
+              </FieldWrapper>
             );
           })}
         </div>
       </fieldset>
+      {children}
       <div className="drawer-actions">
         <button className="button button--secondary" disabled={submitting} onClick={onCancel} type="button">
           Cancel

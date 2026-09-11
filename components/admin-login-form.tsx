@@ -1,20 +1,10 @@
 "use client";
 
 import {
-  useEffect,
-  useRef,
   useState,
   useSyncExternalStore,
   type FormEvent,
 } from "react";
-
-import { AccountSwitchButton } from "@/components/account-switch-button";
-
-type AdminCheckPayload = {
-  authenticated?: boolean;
-  email?: string;
-  isAdmin?: boolean;
-};
 
 type ErrorPayload = {
   detail?: unknown;
@@ -49,13 +39,6 @@ export function AdminLoginForm({ returnPath }: { returnPath: string }) {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [deniedEmail, setDeniedEmail] = useState<string | null>(null);
-  const deniedNoticeRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (deniedEmail) deniedNoticeRef.current?.focus();
-  }, [deniedEmail]);
-
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
@@ -79,51 +62,14 @@ export function AdminLoginForm({ returnPath }: { returnPath: string }) {
         return;
       }
 
-      const permissionResponse = await fetch("/api/backend/api/admin/check", {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      if (!permissionResponse.ok) {
-        setError("Signed in, but administrator permission could not be confirmed. Try again.");
-        return;
-      }
-
-      const permission = (await permissionResponse.json()) as AdminCheckPayload;
-      if (permission.isAdmin === true) {
-        window.location.replace(returnPath);
-        return;
-      }
-      if (permission.authenticated === true) {
-        setDeniedEmail(permission.email || email.trim().toLowerCase());
-        setPassword("");
-        return;
-      }
-
-      setError("The backend accepted the login but did not establish a session. Try again.");
+      // The login endpoint already checks the active admin role. The destination
+      // layout rechecks permissions before rendering protected content.
+      window.location.replace(returnPath);
     } catch {
       setError("The backend is unavailable right now. Please try again shortly.");
     } finally {
       setSubmitting(false);
     }
-  }
-
-  if (deniedEmail) {
-    return (
-      <div className="login-permission-state">
-        <div
-          className="login-notice is-warning"
-          ref={deniedNoticeRef}
-          role="alert"
-          tabIndex={-1}
-        >
-          <strong>No administrator permission</strong>
-          <span>
-            {deniedEmail} is signed in, but it is not approved to use this console.
-          </span>
-        </div>
-        <AccountSwitchButton returnPath={returnPath} />
-      </div>
-    );
   }
 
   // Credential-manager extensions commonly decorate inputs before React

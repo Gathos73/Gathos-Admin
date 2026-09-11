@@ -1,3 +1,6 @@
+import { DEBUGGING_CONFIGS } from "./debugging-resources";
+import { CATALOG_CONFIGS } from "./catalog-resources";
+import { SUBSCRIPTION_CONFIG } from "./subscription-resource";
 import type {
   ResourceConfig,
   ResourceField,
@@ -10,6 +13,7 @@ const PLAN_OPTIONS: SelectOption[] = [
   { label: "Trial", value: "trial" },
   { label: "Pro", value: "pro" },
   { label: "Creator", value: "pro_plus" },
+  { label: "Business", value: "business" },
   { label: "Starter", value: "starter" },
   { label: "Scale", value: "scale" },
 ];
@@ -18,19 +22,13 @@ const GENERATION_TYPE_OPTIONS: SelectOption[] = [
   { label: "Image", value: "image" },
   { label: "Text to speech", value: "tts" },
   { label: "Video", value: "video" },
+          { label: "Image to image", value: "image2image" },
 ];
 
 const USER_QUOTA_FIELDS: ResourceField[] = [
   {
-    name: "daily_limit",
-    label: "Daily limit",
-    kind: "number",
-    nullable: true,
-    min: 0,
-  },
-  {
     name: "window_limit",
-    label: "Rolling-window limit",
+    label: "Combined UTC-window limit",
     kind: "number",
     nullable: true,
     min: 0,
@@ -43,22 +41,22 @@ const USER_QUOTA_FIELDS: ResourceField[] = [
     min: 1,
   },
   {
-    name: "image_daily_limit",
-    label: "Image daily limit",
+    name: "image_window_limit",
+    label: "Image UTC-window limit",
     kind: "number",
     nullable: true,
     min: 0,
   },
   {
-    name: "tts_daily_limit",
-    label: "TTS daily limit",
+    name: "tts_window_limit",
+    label: "TTS UTC-window limit",
     kind: "number",
     nullable: true,
     min: 0,
   },
   {
-    name: "video_daily_limit",
-    label: "Video daily limit",
+    name: "video_window_limit",
+    label: "Video UTC-window limit",
     kind: "number",
     nullable: true,
     min: 0,
@@ -66,6 +64,9 @@ const USER_QUOTA_FIELDS: ResourceField[] = [
 ];
 
 export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
+  ...CATALOG_CONFIGS,
+  ...DEBUGGING_CONFIGS,
+  entitlements: SUBSCRIPTION_CONFIG,
   users: {
     key: "users",
     label: "Users",
@@ -80,8 +81,6 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
       { name: "plan", label: "Plan", kind: "status", sortable: true },
       { name: "is_suspended", label: "Suspended", kind: "boolean", sortable: true },
       { name: "is_comped", label: "Comped", kind: "boolean", sortable: true },
-      { name: "daily_used", label: "Daily used", kind: "number", sortable: true },
-      { name: "daily_limit", label: "Daily limit", kind: "number", sortable: true },
       { name: "created_at", label: "Created", kind: "date", sortable: true },
     ],
     fields: [
@@ -91,8 +90,9 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
       {
         name: "plan",
         label: "Plan",
-        kind: "select",
-        options: PLAN_OPTIONS,
+        kind: "relation",
+        referenceResource: "plans",
+        referenceValue: "code",
         defaultValue: "free",
       },
       {
@@ -180,7 +180,6 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
       },
       { name: "type", label: "Type", kind: "status", sortable: true },
       { name: "is_active", label: "Active", kind: "boolean", sortable: true },
-      { name: "calls_count", label: "Calls", kind: "number", sortable: true },
       { name: "last_used_at", label: "Last used", kind: "date", sortable: true },
       { name: "created_at", label: "Created", kind: "date", sortable: true },
     ],
@@ -204,6 +203,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
           { label: "Image generation", value: "image_gen" },
           { label: "Text to speech", value: "tts" },
           { label: "Video", value: "video" },
+          { label: "Image to image", value: "image2image" },
         ],
         defaultValue: "image_gen",
       },
@@ -228,6 +228,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
           { label: "Image generation", value: "image_gen" },
           { label: "Text to speech", value: "tts" },
           { label: "Video", value: "video" },
+          { label: "Image to image", value: "image2image" },
         ],
       },
       {
@@ -245,71 +246,6 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
     canDelete: true,
     canBulkDelete: false,
     secretResponseFields: ["raw_key", "full_key"],
-  },
-  tier_defaults: {
-    key: "tier_defaults",
-    label: "Tier defaults",
-    labelSingular: "tier default",
-    description: "Default quotas applied to plans and optionally existing users.",
-    primaryKey: "tier",
-    defaultOrder: "updated_at",
-    defaultDescending: true,
-    listDisplay: [
-      { name: "tier", label: "Tier", kind: "status", sortable: true },
-      { name: "daily_limit", label: "Daily limit", kind: "number", sortable: true },
-      { name: "window_limit", label: "Window limit", kind: "number", sortable: true },
-      { name: "max_concurrent", label: "Concurrency", kind: "number", sortable: true },
-      { name: "updated_by", label: "Updated by", sortable: true },
-      { name: "updated_at", label: "Updated", kind: "date", sortable: true },
-    ],
-    fields: [
-      {
-        name: "tier",
-        label: "Tier",
-        kind: "select",
-        required: true,
-        immutableOnEdit: true,
-        options: [
-          { label: "Pro", value: "pro" },
-          { label: "Creator", value: "pro_plus" },
-          { label: "Trial", value: "trial" },
-        ],
-      },
-      { name: "daily_limit", label: "Daily limit", kind: "number", required: true, min: 0 },
-      { name: "window_limit", label: "Window limit", kind: "number", required: true, min: 0 },
-      {
-        name: "max_concurrent",
-        label: "Maximum concurrent jobs",
-        kind: "number",
-        required: true,
-        min: 1,
-      },
-      {
-        name: "applyToExisting",
-        label: "Apply to existing users",
-        kind: "boolean",
-        editOnly: true,
-        defaultValue: false,
-        help: "When limits change, also update users whose affected limits still match the previous defaults. Custom overrides are preserved.",
-      },
-    ],
-    searchFields: [{ label: "Tier", value: "tier" }],
-    filters: [
-      {
-        name: "tier",
-        label: "Tier",
-        options: [
-          { label: "Pro", value: "pro" },
-          { label: "Creator", value: "pro_plus" },
-          { label: "Trial", value: "trial" },
-        ],
-      },
-    ],
-    mutations: { basePath: "/tier-defaults", updateMethod: "PUT" },
-    canCreate: true,
-    canEdit: true,
-    canDelete: true,
-    canBulkDelete: false,
   },
   security_blocklist: {
     key: "security_blocklist",
@@ -472,7 +408,6 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
     listDisplay: [
       { name: "email", label: "Email", sortable: true },
       { name: "name", label: "Name", sortable: true },
-      { name: "wallet_balance", label: "Wallet (USD)", kind: "number", sortable: true },
       { name: "created_at", label: "Joined", kind: "date", sortable: true },
     ],
     fields: [
@@ -525,18 +460,21 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
       { name: "created_at", label: "Created", kind: "date", sortable: true },
     ],
     fields: [
-      { name: "user_id", label: "User ID", kind: "text", required: true },
-      { name: "api_key_id", label: "API key ID", kind: "text", nullable: true },
+      { name: "title", label: "Title", kind: "text", nullable: true },
+      { name: "user_id", label: "User ID", kind: "text", required: true, createOnly: true },
+      { name: "api_key_id", label: "API key ID", kind: "text", nullable: true, createOnly: true },
       {
         name: "type",
         label: "Type",
         kind: "select",
         required: true,
         options: GENERATION_TYPE_OPTIONS,
+        createOnly: true,
         defaultValue: "image",
       },
-      { name: "prompt", label: "Prompt", kind: "textarea", required: true },
+      { name: "prompt", label: "Prompt", kind: "textarea", required: true, createOnly: true },
       {
+        createOnly: true,
         name: "params",
         label: "Parameters",
         kind: "json",
@@ -545,10 +483,10 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
         defaultValue: {},
         help: "Valid JSON passed to the generation provider.",
       },
-      { name: "job_id", label: "Job ID", kind: "text", nullable: true },
-      { name: "plan", label: "Plan snapshot", kind: "select", nullable: true, options: PLAN_OPTIONS },
-      { name: "ip_address", label: "IP address", kind: "text", nullable: true },
-      { name: "user_agent", label: "User agent", kind: "textarea", nullable: true },
+      { name: "job_id", label: "Job ID", kind: "text", nullable: true, createOnly: true },
+      { name: "plan", label: "Plan snapshot", kind: "select", nullable: true, createOnly: true, options: PLAN_OPTIONS },
+      { name: "ip_address", label: "IP address", kind: "text", nullable: true, createOnly: true },
+      { name: "user_agent", label: "User agent", kind: "textarea", nullable: true, createOnly: true },
     ],
     searchFields: [
       { label: "Prompt", value: "prompt" },
@@ -565,19 +503,119 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
     canDelete: true,
     canBulkDelete: false,
   },
+  priority_support_requests: {
+    key: "priority_support_requests",
+    label: "Priority support",
+    labelSingular: "support ticket",
+    description: "Enterprise priority support tickets and grievance reports.",
+    primaryKey: "id",
+    defaultOrder: "created_at",
+    defaultDescending: true,
+    listDisplay: [
+      {
+        name: "user_id",
+        label: "User",
+        display: {
+          primaryPath: "user.name",
+          secondaryPath: "user.email",
+          fallbackPaths: ["user.email", "user_id"],
+        },
+      },
+      { name: "user_plan", label: "User's Plan", kind: "status" },
+      { name: "product", label: "Product" },
+      {
+        name: "generation_id",
+        label: "Generation",
+        kind: "link",
+        linkPrefix: "/generations/",
+      },
+      { name: "status", label: "Status", kind: "status", sortable: true },
+      { name: "created_at", label: "Created", kind: "date", sortable: true },
+    ],
+    fields: [
+      { name: "user_id", label: "User ID", kind: "text", editOnly: true },
+      { name: "user_email", label: "User Email", kind: "email", editOnly: true },
+      { name: "user_plan", label: "User's Plan", kind: "text", editOnly: true },
+      { name: "product", label: "Product", kind: "text", editOnly: true },
+      { name: "api_key_id", label: "API key ID", kind: "text", nullable: true, editOnly: true },
+      { name: "generation_id", label: "Generation ID", kind: "text", nullable: true, editOnly: true },
+      { name: "greivience", label: "Grievance", kind: "textarea" },
+      {
+        name: "status",
+        label: "Status",
+        kind: "select",
+        required: true,
+        options: [
+          { label: "Open", value: "open" },
+          { label: "Resolved", value: "resolved" },
+        ],
+        defaultValue: "open",
+      },
+      { name: "created_at", label: "Created at", kind: "datetime", editOnly: true },
+      { name: "updated_at", label: "Updated at", kind: "datetime", editOnly: true },
+    ],
+    searchFields: [
+      { label: "User Email", value: "user_email" },
+      { label: "User Name", value: "user_name" },
+      { label: "Grievance", value: "greivience" },
+      { label: "Generation ID", value: "generation_id" },
+    ],
+    filters: [
+      {
+        name: "status",
+        label: "Status",
+        options: [
+          { label: "Open", value: "open" },
+          { label: "Resolved", value: "resolved" },
+        ],
+      },
+      {
+        name: "product",
+        label: "Product",
+        options: [
+          { label: "Image", value: "image" },
+          { label: "Text to speech", value: "tts" },
+          { label: "Video", value: "video" },
+          { label: "Image to image", value: "image2image" },
+        ],
+      },
+      {
+        name: "user_id",
+        label: "User ID",
+      },
+    ],
+    mutations: { basePath: "/priority-support-requests" },
+    canCreate: false,
+    canEdit: true,
+    canDelete: true,
+    canBulkDelete: false,
+  },
 };
 
 export const RESOURCE_KEYS = Object.keys(RESOURCE_CONFIGS) as ResourceKey[];
 
 export const RESOURCE_SLUGS: Record<string, ResourceKey> = {
+  "checkout-sessions": "checkout_sessions",
+  "checkout-invites": "checkout_invites",
+  "webhook-events": "webhook_events",
+  "affiliate-commissions": "affiliate_commissions",
+  "affiliate-withdrawals": "affiliate_withdrawals",
+  "generation-attempts": "generation_attempts",
+  "generation-outbox": "generation_outbox",
+
+  products: "products",
+  "product-routes": "product_routes",
+  plans: "plans",
+  subscriptions: "entitlements",
+  "plan-limits": "plan_limits",
   users: "users",
   "api-keys": "api_keys",
-  "tier-defaults": "tier_defaults",
   "security-blocklist": "security_blocklist",
   "meta-deletion-requests": "meta_deletion_requests",
   "newsletter-subscribers": "newsletter_subscribers",
   affiliates: "affiliates",
   generations: "generations",
+  "priority-support": "priority_support_requests",
 };
 
 export const RESOURCE_ROUTE_SLUGS = Object.keys(RESOURCE_SLUGS);

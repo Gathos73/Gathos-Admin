@@ -1,5 +1,7 @@
 "use client";
 
+import { clearRequestCache } from "@/lib/request-cache";
+
 import type { ComponentType, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -11,27 +13,41 @@ import {
   CloseIcon,
   DashboardIcon,
   DeletionIcon,
+  GpuIcon,
   KeyIcon,
   LogoutIcon,
   MailIcon,
   MenuIcon,
+  ProductIcon,
   SearchIcon,
   ShieldIcon,
   SparklesIcon,
+  SupportIcon,
   TierIcon,
   UsersIcon,
   type IconProps,
 } from "@/components/icons";
 
+import { RESOURCE_GROUPS } from "@/lib/resource-groups";
+
 type NavItem = {
   description: string;
   href: string;
+  hideFromSidebar?: boolean;
   icon: ComponentType<IconProps>;
   keywords: string;
   label: string;
 };
 
 const NAV_ITEMS: NavItem[] = [
+  { href: "/checkout-sessions", label: "Checkout sessions", description: "View and edit checkout sessions", icon: TierIcon, keywords: "debugging payment billing checkout_sessions" },
+  { href: "/checkout-invites", label: "Checkout invites", description: "View and edit checkout invites", icon: TierIcon, keywords: "debugging payment billing checkout_invites" },
+  { href: "/webhook-events", label: "Payment webhooks", description: "View and edit payment webhooks", icon: TierIcon, keywords: "debugging payment billing webhook_events" },
+  { href: "/affiliate-commissions", label: "Affiliate commissions", description: "View and edit affiliate commissions", icon: TierIcon, keywords: "debugging payment billing affiliate_commissions" },
+  { href: "/affiliate-withdrawals", label: "Affiliate withdrawals", description: "View and edit affiliate withdrawals", icon: TierIcon, keywords: "debugging payment billing affiliate_withdrawals" },
+  { href: "/generation-attempts", label: "Job attempts", description: "View and edit job attempts", icon: GpuIcon, keywords: "debugging jobs generation_attempts" },
+  { href: "/generation-outbox", label: "Job outbox", description: "View and edit job outbox", icon: GpuIcon, keywords: "debugging jobs generation_outbox" },
+
   {
     description: "System overview",
     href: "/",
@@ -39,6 +55,18 @@ const NAV_ITEMS: NavItem[] = [
     keywords: "home overview dashboard",
     label: "Dashboard",
   },
+  {
+    description: "Live GPU capacity and scheduler status",
+    href: "/gpu-health",
+    icon: GpuIcon,
+    keywords: "gpu health capacity active free queue scheduler workers",
+    label: "GPU health",
+  },
+  { href: "/products", label: "Products", description: "Manage products", icon: ProductIcon, keywords: "catalog products" },
+  // { href: "/product-routes", label: "Product routes", description: "Manage product routes", icon: TierIcon, keywords: "catalog product_routes", hideFromSidebar: true },
+  { href: "/plans", label: "Plans", description: "Manage plans", icon: TierIcon, keywords: "catalog plans" },
+  { href: "/subscriptions", label: "Subscriptions", description: "User subscriptions, billing periods, and access history", icon: TierIcon, keywords: "entitlements subscriptions renewal billing dates" },
+  // { href: "/plan-limits", label: "Plan limits", description: "Manage plan limits", icon: TierIcon, keywords: "catalog plan_limits" },
   {
     description: "Accounts and access",
     href: "/users",
@@ -52,13 +80,6 @@ const NAV_ITEMS: NavItem[] = [
     icon: KeyIcon,
     keywords: "credentials tokens keys",
     label: "API keys",
-  },
-  {
-    description: "Plan limits",
-    href: "/tier-defaults",
-    icon: TierIcon,
-    keywords: "plan quota limits defaults",
-    label: "Tier defaults",
   },
   {
     description: "Network restrictions",
@@ -95,10 +116,17 @@ const NAV_ITEMS: NavItem[] = [
     keywords: "generation ai image tts video job",
     label: "Generations",
   },
+  {
+    description: "Enterprise priority support tickets",
+    href: "/priority-support",
+    icon: SupportIcon,
+    keywords: "priority support tickets enterprise grievance",
+    label: "Priority support",
+  },
 ];
 
 function isActivePath(pathname: string, href: string) {
-  return href === "/" ? pathname === href : pathname.startsWith(href);
+  return href === "/" ? pathname === href : (pathname === href || pathname.startsWith(`${href}/`));
 }
 
 export function AdminShell({ children, email }: { children: ReactNode; email?: string }) {
@@ -118,8 +146,8 @@ export function AdminShell({ children, email }: { children: ReactNode; email?: s
   const normalizedQuery = query.trim().toLowerCase();
   const matches = normalizedQuery
     ? NAV_ITEMS.filter((item) =>
-        `${item.label} ${item.description} ${item.keywords}`.toLowerCase().includes(normalizedQuery),
-      )
+      `${item.label} ${item.description} ${item.keywords}`.toLowerCase().includes(normalizedQuery),
+    )
     : [];
 
   useEffect(() => {
@@ -155,6 +183,7 @@ export function AdminShell({ children, email }: { children: ReactNode; email?: s
     setSigningOut(true);
     setLogoutError("");
     try {
+      clearRequestCache();
       const response = await fetch("/api/backend/api/auth/logout", {
         credentials: "same-origin",
         method: "POST",
@@ -204,7 +233,7 @@ export function AdminShell({ children, email }: { children: ReactNode; email?: s
 
         <nav aria-label="Admin navigation" className="sidebar-nav">
           <p className="sidebar-section-label">Overview</p>
-          {NAV_ITEMS.slice(0, 1).map((item) => {
+          {NAV_ITEMS.filter((item) => item.href === "/" || item.href === "/gpu-health").map((item) => {
             const Icon = item.icon;
             const active = isActivePath(pathname, item.href);
             return (
@@ -222,24 +251,40 @@ export function AdminShell({ children, email }: { children: ReactNode; email?: s
             );
           })}
 
-          <p className="sidebar-section-label sidebar-section-label--spaced">Data management</p>
-          {NAV_ITEMS.slice(1).map((item) => {
-            const Icon = item.icon;
-            const active = isActivePath(pathname, item.href);
-            return (
-              <Link
-                aria-label={item.label}
-                aria-current={active ? "page" : undefined}
-                className={`sidebar-link ${active ? "is-active" : ""}`}
-                href={item.href}
-                key={item.href}
-                onClick={() => setMenuOpen(false)}
-              >
-                <Icon />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+          {RESOURCE_GROUPS.map((group) => (
+            <details
+              className="sidebar-group"
+              key={`${group.id}:${pathname}:${sidebarCollapsed}`}
+              open={sidebarCollapsed || group.hrefs.some((href) => isActivePath(pathname, href))}
+            >
+              <summary className="sidebar-group-heading">
+                <span>{group.label}</span>
+                <ChevronRightIcon />
+              </summary>
+              {group.hrefs.filter((href) => {
+                const item = NAV_ITEMS.find((entry) => entry.href === href);
+                return item && !item.hideFromSidebar;
+              }).map((href) => {
+                const item = NAV_ITEMS.find((entry) => entry.href === href)!;
+                const Icon = item.icon;
+                const active = isActivePath(pathname, item.href);
+                return (
+                  <Link
+                    aria-label={item.label}
+                    aria-current={active ? "page" : undefined}
+                    className={`sidebar-link ${active ? "is-active" : ""}`}
+                    href={item.href}
+                    key={item.href}
+                    title={item.label}
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    <Icon />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </details>
+          ))}
         </nav>
 
         <div className="sidebar-footer">

@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { PlanBillingActions } from "./plan-billing-actions";
+import { clearRequestCache } from "@/lib/request-cache";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -10,6 +13,15 @@ import {
   getResourceRecord,
   updateResource,
 } from "../lib/api";
+import {
+  EMPTY_CATALOG_INLINE_DRAFTS,
+  PRODUCT_CACHE,
+  cacheProducts,
+  newProductLimitDraft,
+  serializePlanLimitDrafts,
+  type CatalogInlineDrafts,
+  type ProductLimitDraft,
+} from "../lib/catalog-inline-drafts";
 import { getResourceConfig } from "../lib/resources";
 import type { JsonObject, ResourceKey, ResourceRecord } from "../lib/types";
 import { ConfirmDialog } from "./confirm-dialog";
@@ -18,11 +30,15 @@ import {
   ChevronRightIcon,
   DeleteIcon,
   EditIcon,
+  KeyIcon,
   RefreshIcon,
 } from "./icons";
 import { RecordDetail, recordLabel } from "./record-detail";
 import { RecordForm } from "./record-form";
+import { PlanLimitsCreateInline, PlanLimitsInline } from "./plan-limits-inline";
+import { ProductRoutesInline } from "./product-routes-inline";
 import { ToastViewport, useToast } from "./toast";
+import { UserPasswordDialog } from "./user-password-form";
 
 type RecordPageMode = "view" | "edit";
 
@@ -51,6 +67,25 @@ function formatDate(value: unknown): string {
   return DATE_FORMATTER.format(date);
 }
 
+function objectRows(value: unknown): ResourceRecord[] {
+  return Array.isArray(value)
+    ? value.filter(
+        (item): item is ResourceRecord => Boolean(item && typeof item === "object" && !Array.isArray(item)),
+      )
+    : [];
+}
+
+function primaryRecordFields(resourceKey: ResourceKey, record: ResourceRecord): ResourceRecord {
+  const fields = { ...record };
+  if (resourceKey === "plans") {
+    delete fields.plan_limits;
+    delete fields.plan_products;
+  } else if (resourceKey === "products") {
+    delete fields.product_routes;
+  }
+  return fields;
+}
+
 export function ResourceRecordPage({
   mode,
   recordId,
@@ -75,8 +110,12 @@ export function ResourceRecordPage({
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [planProducts, setPlanProducts] = useState<{ id: string; code: string; name: string }[]>([]);
+  const [inlineDrafts, setInlineDrafts] = useState<CatalogInlineDrafts>(EMPTY_CATALOG_INLINE_DRAFTS);
+  const [inlineError, setInlineError] = useState("");
 
   const loading = loadState.requestKey !== requestKey;
   const record = loading ? null : loadState.record;
@@ -86,6 +125,10 @@ export function ResourceRecordPage({
   const viewPath = `${listPath}/${encodedId}`;
   const editPath = `${viewPath}/edit`;
   const label = record ? recordLabel(record, config.primaryKey) : recordId;
+  const canResetUserPassword =
+    mode === "view" &&
+    resourceKey === "users" &&
+    Boolean(record && record.status !== "deleted" && !record.deleted_at);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -94,7 +137,59 @@ export function ResourceRecordPage({
     getResourceRecord(resourceKey, recordId, controller.signal)
       .then((response) => {
         if (!active) return;
-        setLoadState({ error: null, record: response.row, requestKey });
+        const row = response.row;
+        if (row) {
+          if (Array.isArray(row.plan_products)) {
+            cacheProducts(row.plan_products as Array<{ id?: unknown; code?: unknown; name?: unknown }>);
+          }
+          if (Array.isArray(row.plan_limits)) {
+            cacheProducts(
+              (row.plan_limits as Array<{ product_id?: unknown; product_name?: unknown; product_code?: unknown }>)
+                .filter((l) => l.product_id)
+                .map((l) => ({ id: l.product_id, name: l.product_name, code: l.product_code })),
+            );
+          }
+          if (resourceKey === "plan_limits" && row.product_id) {
+            cacheProducts([{ id: row.product_id, name: row.product_name, code: row.product_code }]);
+          }
+          if (resourceKey === "plans") {
+            const rawLimits = objectRows(row.plan_limits);
+            const rawProducts = Array.isArray(row.plan_products)
+              ? (row.plan_products as Array<{ id: unknown; code?: unknown; name?: unknown }>)
+              : [];
+            const productList = rawProducts.map((p) => ({
+              id: String(p.id),
+              code: String(p.code ?? ""),
+              name: String(p.name ?? ""),
+            }));
+            setPlanProducts(productList);
+
+            const limitMap = new Map<string, ResourceRecord>();
+            for (const lim of rawLimits) {
+              if (lim.product_id) limitMap.set(String(lim.product_id), lim);
+            }
+
+            const drafts: ProductLimitDraft[] = productList.map((p) => {
+              const existing = limitMap.get(p.id);
+              if (existing) {
+                return {
+                  draftKey: String(existing.id || p.id),
+                  productId: p.id,
+                  productCode: p.code,
+                  productName: p.name,
+                  fixedWindowLimit: existing.fixed_window_limit == null ? "" : String(existing.fixed_window_limit),
+                  queueDepthLimit: existing.queue_depth_limit == null ? "" : String(existing.queue_depth_limit),
+                  concurrencyLimit: existing.concurrency_limit == null ? "" : String(existing.concurrency_limit),
+                  deleteRequested: false,
+                };
+              }
+              return newProductLimitDraft(crypto.randomUUID(), p.id, p.code, p.name);
+            });
+
+            setInlineDrafts((curr) => ({ ...curr, planLimits: drafts }));
+          }
+        }
+        setLoadState({ error: null, record: row, requestKey });
       })
       .catch((error: unknown) => {
         if (!active || (error instanceof DOMException && error.name === "AbortError")) return;
@@ -107,19 +202,69 @@ export function ResourceRecordPage({
     };
   }, [recordId, requestKey, resourceKey]);
 
+  const handleFieldValueChange = (name: string, value: unknown) => {
+    if (resourceKey !== "plans" || name !== "product_ids") return;
+    setInlineError("");
+    let productIds: string[] = [];
+    try {
+      const parsed = JSON.parse(String(value || "[]"));
+      if (Array.isArray(parsed)) productIds = parsed.map(String);
+    } catch {
+      productIds = [];
+    }
+    const productIdSet = new Set(productIds);
+    const freshProducts = productIds.map((id) => {
+      const row = PRODUCT_CACHE.get(id) || planProducts.find((r) => r.id === id);
+      return { id, code: row ? row.code : "", name: row ? row.name : "" };
+    });
+
+    setPlanProducts(freshProducts);
+    setInlineDrafts((current) => {
+      const currentDraftIds = new Set(current.planLimits.map((d) => d.productId));
+      const kept = current.planLimits.filter((d) => productIdSet.has(d.productId));
+      const newDrafts = freshProducts
+        .filter((p) => !currentDraftIds.has(p.id))
+        .map((p) => newProductLimitDraft(crypto.randomUUID(), p.id, p.code, p.name));
+      return { ...current, planLimits: [...kept, ...newDrafts] };
+    });
+  };
+
   async function submitRecord(payload: JsonObject) {
     setSubmitting(true);
     setActionError(null);
     setSuccessMessage(null);
+    const updatePayload: JsonObject = { ...payload };
+
+    if (resourceKey === "plans") {
+      const productIds = Array.isArray(payload.product_ids)
+        ? payload.product_ids.map(String)
+        : planProducts.map((p) => p.id);
+      const result = serializePlanLimitDrafts(inlineDrafts.planLimits, productIds);
+      if (result.error) {
+        setInlineError(result.error);
+        pushToast(result.error, "error");
+        setSubmitting(false);
+        return;
+      }
+      updatePayload.plan_limits = result.rows ?? [];
+      updatePayload.product_ids = productIds;
+    }
+
     try {
-      await updateResource(config, recordId, payload);
+      const response = await updateResource(config, recordId, updatePayload);
+      const saved = response.row;
+      if (saved && typeof saved === "object" && !Array.isArray(saved) && saved.id && saved.id !== recordId) {
+        router.push(`${listPath}/${encodeURIComponent(String(saved.id))}`);
+        return;
+      }
       const message = `${config.labelSingular[0].toUpperCase()}${config.labelSingular.slice(1)} updated successfully.`;
       setSuccessMessage(message);
       pushToast(message, "success");
-      setRefreshVersion((version) => version + 1);
+      clearRequestCache(); setRefreshVersion((version) => version + 1);
     } catch (error) {
       const message = errorMessage(error);
       setActionError(message);
+      if (resourceKey === "plans") setInlineError(message);
       pushToast(message, "error");
     } finally {
       setSubmitting(false);
@@ -143,6 +288,13 @@ export function ResourceRecordPage({
     }
   }
 
+  function handleInlineChanged(message: string) {
+    setSuccessMessage(message);
+    pushToast(message, "success");
+    clearRequestCache();
+    setRefreshVersion((version) => version + 1);
+  }
+
   return (
     <div className="record-page">
       <nav aria-label="Record breadcrumb" className="record-page-breadcrumbs">
@@ -151,6 +303,7 @@ export function ResourceRecordPage({
         <span aria-current="page">{mode === "edit" ? `Edit ${label}` : label}</span>
       </nav>
 
+      {resourceKey === "plans" && record && mode === "view" ? <PlanBillingActions plan={record} onChanged={handleInlineChanged} onRefresh={() => { clearRequestCache(); setRefreshVersion((version) => version + 1); }} /> : null}
       <header className="record-page-header">
         <div>
           <p className="resource-eyebrow">{mode === "edit" ? "Change record" : "Record detail"}</p>
@@ -165,6 +318,16 @@ export function ResourceRecordPage({
           <Link className="button button--secondary" href={listPath}>
             Back to {config.label.toLowerCase()}
           </Link>
+          {canResetUserPassword ? (
+            <button
+              className="button button--secondary"
+              onClick={() => setPasswordDialogOpen(true)}
+              type="button"
+            >
+              <KeyIcon size={15} />
+              Reset password
+            </button>
+          ) : null}
           {mode === "view" && config.canEdit ? (
             <Link className="button button--primary" href={editPath}>
               <EditIcon size={15} />
@@ -242,7 +405,7 @@ export function ResourceRecordPage({
             <p>{loadError}</p>
             <button
               className="button button--secondary"
-              onClick={() => setRefreshVersion((version) => version + 1)}
+              onClick={() => { clearRequestCache(); setRefreshVersion((version) => version + 1); }}
               type="button"
             >
               <RefreshIcon size={15} />
@@ -264,15 +427,49 @@ export function ResourceRecordPage({
                 key={`edit-${recordId}-${refreshVersion}`}
                 mode="edit"
                 onCancel={() => router.push(viewPath)}
+                onFieldValueChange={handleFieldValueChange}
                 onSubmit={submitRecord}
                 submitting={submitting}
-              />
+              >
+                {resourceKey === "plans" ? (
+                  <PlanLimitsCreateInline
+                    allowedProducts={planProducts}
+                    drafts={inlineDrafts.planLimits}
+                    error={inlineError}
+                    onChange={(planLimits) =>
+                      setInlineDrafts((current) => ({ ...current, planLimits }))
+                    }
+                    submitting={submitting}
+                  />
+                ) : null}
+              </RecordForm>
             ) : (
-              <RecordDetail config={config} record={record} />
+              <RecordDetail
+                config={config}
+                record={primaryRecordFields(resourceKey, record)}
+              />
             )}
           </div>
         ) : null}
       </section>
+
+      {resourceKey === "plans" && record && mode === "view" ? (
+        <PlanLimitsInline
+          limits={objectRows(record.plan_limits)}
+          mode={mode}
+          onChanged={handleInlineChanged}
+          planId={recordId}
+        />
+      ) : null}
+
+      {resourceKey === "products" && record ? (
+        <ProductRoutesInline
+          mode={mode}
+          onChanged={handleInlineChanged}
+          productId={recordId}
+          routes={objectRows(record.product_routes)}
+        />
+      ) : null}
 
       <ConfirmDialog
         busy={deleting}
@@ -283,6 +480,18 @@ export function ResourceRecordPage({
         open={deleteOpen}
         title="Delete this record?"
       />
+      {record ? (
+        <UserPasswordDialog
+          email={String(record.email ?? label)}
+          onCancel={() => setPasswordDialogOpen(false)}
+          onSuccess={() => {
+            setPasswordDialogOpen(false);
+            pushToast(`Password reset successfully for ${String(record.email ?? label)}.`, "success");
+          }}
+          open={passwordDialogOpen}
+          userId={recordId}
+        />
+      ) : null}
       <ToastViewport onDismiss={dismissToast} toasts={toasts} />
     </div>
   );

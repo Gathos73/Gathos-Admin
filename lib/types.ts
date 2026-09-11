@@ -1,12 +1,24 @@
 export type ResourceKey =
+  | "checkout_sessions"
+  | "checkout_invites"
+  | "webhook_events"
+  | "affiliate_commissions"
+  | "affiliate_withdrawals"
+  | "generation_attempts"
+  | "generation_outbox"
+  | "products"
+  | "product_routes"
+  | "plans"
+  | "entitlements"
+  | "plan_limits"
   | "users"
   | "api_keys"
-  | "tier_defaults"
   | "security_blocklist"
   | "meta_deletion_requests"
   | "newsletter_subscribers"
   | "affiliates"
-  | "generations";
+  | "generations"
+  | "priority_support_requests";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
@@ -14,6 +26,8 @@ export type JsonObject = { [key: string]: JsonValue | undefined };
 export type ResourceRecord = JsonObject;
 
 export type FieldKind =
+  | "relation"
+  | "relations"
   | "text"
   | "email"
   | "number"
@@ -43,6 +57,8 @@ export interface ResourceField {
   step?: number;
   jsonObject?: boolean;
   defaultValue?: JsonPrimitive | JsonObject | JsonValue[];
+  referenceResource?: ResourceKey;
+  referenceValue?: "id" | "code";
   options?: SelectOption[];
 }
 
@@ -53,7 +69,8 @@ export type ColumnKind =
   | "boolean"
   | "status"
   | "date"
-  | "json";
+  | "json"
+  | "link";
 
 export interface ResourceColumn {
   /** Physical row field used as this column's stable key and sort field. */
@@ -61,6 +78,8 @@ export interface ResourceColumn {
   label: string;
   kind?: ColumnKind;
   sortable?: boolean;
+  nullLabel?: string;
+  linkPrefix?: string;
   /**
    * Optional read-only presentation override. Paths may traverse embedded API
    * objects, for example `user.name`. The physical field remains available to

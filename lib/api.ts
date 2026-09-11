@@ -1,3 +1,5 @@
+import { cachedRequest, clearRequestCache } from "./request-cache";
+
 import type {
   JsonObject,
   ResourceConfig,
@@ -8,6 +10,23 @@ import type {
 } from "./types";
 
 const BACKEND_PROXY = "/api/backend";
+
+export type GpuHealthSnapshot = {
+  capacity: {
+    available: boolean;
+    free_slots: number;
+    healthy_slots: number;
+    observed_at: string | null;
+    queue_depth: number | null;
+  };
+  scheduler: {
+    api_enabled: boolean;
+    mode: string;
+    policy_version: string;
+    source: string | null;
+    worker_lease_api_enabled: boolean;
+  };
+};
 
 export class ApiError extends Error {
   readonly status: number;
@@ -50,7 +69,24 @@ function redirectUnauthorized(): void {
   window.location.replace(`/login?return_to=${encodeURIComponent(returnTo)}`);
 }
 
-async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+export { clearRequestCache } from "./request-cache";
+
+async function apiFetch<T>(path: string, init: RequestInit = {}, force = false): Promise<T> {
+  const method = (init.method ?? "GET").toUpperCase();
+  if (method === "GET" && typeof window !== "undefined") {
+    return cachedRequest(
+      path,
+      () => uncachedApiFetch<T>(path, { ...init, signal: undefined }),
+      init.signal,
+      force,
+    );
+  }
+  clearRequestCache();
+  try { return await uncachedApiFetch<T>(path, init); }
+  finally { clearRequestCache(); }
+}
+
+async function uncachedApiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
   if (init.body && !headers.has("Content-Type")) {
@@ -77,6 +113,7 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
     ? await response.json().catch(() => null)
     : await response.text().catch(() => "");
 
+  if (response.status === 401 || response.status === 403) clearRequestCache();
   if (response.status === 401) {
     redirectUnauthorized();
     throw new ApiError("Your session has expired. Redirecting to sign in…", 401, payload);
@@ -112,7 +149,7 @@ function listPath(resource: ResourceKey, query: ResourceQuery): string {
     parameters.set("filter_by", query.filterBy);
     parameters.set("filter_value", query.filterValue);
   }
-  return `${BACKEND_PROXY}/api/admin/data/${resource}?${parameters.toString()}`;
+  return `${BACKEND_PROXY}/api/admin/resources/${resource}?${parameters.toString()}`;
 }
 
 function mutationPath(config: ResourceConfig, recordId?: string): string {
@@ -134,7 +171,7 @@ export function getResourceRecord(
   signal?: AbortSignal,
 ): Promise<ResourceRecordResponse> {
   return apiFetch<ResourceRecordResponse>(
-    `${BACKEND_PROXY}/api/admin/data/${resource}/${encodeURIComponent(recordId)}`,
+    `${BACKEND_PROXY}/api/admin/resources/${resource}/${encodeURIComponent(recordId)}`,
     { signal },
   );
 }
@@ -160,6 +197,23 @@ export function updateResource(
   });
 }
 
+export function setUserPassword(userId: string, password: string): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(
+    `${BACKEND_PROXY}/api/admin/users/${encodeURIComponent(userId)}/password`,
+    { method: "POST", body: JSON.stringify({ password }) },
+  );
+}
+
+export function invitePlanUser(planId: string, userId: string, requestId: string): Promise<{ ok: boolean; email: string }> {
+  return apiFetch(`${BACKEND_PROXY}/api/admin/plans/${encodeURIComponent(planId)}/invite`, {
+    method: "POST", body: JSON.stringify({ user_id: userId, request_id: requestId }),
+  });
+}
+
+export function retryPlanBilling(planId: string): Promise<{ ok: boolean }> {
+  return apiFetch(`${BACKEND_PROXY}/api/admin/plans/${encodeURIComponent(planId)}/retry-billing-sync`, { method: "POST" });
+}
+
 export function deleteResource(
   config: ResourceConfig,
   recordId: string,
@@ -167,4 +221,129 @@ export function deleteResource(
   return apiFetch<JsonObject>(mutationPath(config, recordId), {
     method: config.mutations.deleteMethod ?? "DELETE",
   });
+}
+
+export function getResourceCount(resource: ResourceKey): Promise<{ total: number }> {
+  return apiFetch(`${BACKEND_PROXY}/api/admin/resources/${resource}/count`);
+}
+
+export function getGpuHealth(signal?: AbortSignal): Promise<GpuHealthSnapshot> {
+  return apiFetch<GpuHealthSnapshot>(
+    `${BACKEND_PROXY}/api/admin/gpu-health`,
+    { signal },
+    true,
+  );
+}
+
+export type OverviewTimeWindow = "current_window" | "24h" | "7d";
+
+export type TimelinePoint = {
+  timestamp: string;
+  local_timestamp: string;
+  label: string;
+  count: number;
+  breakdown: Record<string, number>;
+};
+
+export type OverviewTimelineResponse = {
+  time_window: OverviewTimeWindow;
+  window_label: string;
+  window_index: number;
+  start_time: string;
+  end_time: string;
+  interval: string;
+  product: string;
+  total_generations: number;
+  peak_count: number;
+  active_users: number;
+  points: TimelinePoint[];
+};
+
+export type OverviewUserStat = {
+  id: string;
+  email: string;
+  name: string;
+  avatar_url: string | null;
+  plan_name: string;
+  plan_code: string;
+  generation_count: number;
+  breakdown: Record<string, number>;
+  last_active: string | null;
+};
+
+export type OverviewUserStatsResponse = {
+  time_window: OverviewTimeWindow;
+  window_label: string;
+  window_index: number;
+  product: string;
+  page: number;
+  page_size: number;
+  total_users: number;
+  total_pages: number;
+  users: OverviewUserStat[];
+};
+
+export type OverviewProduct = {
+  code: string;
+  name: string;
+};
+
+export function getOverviewProducts(signal?: AbortSignal): Promise<{ products: OverviewProduct[] }> {
+  return apiFetch<{ products: OverviewProduct[] }>(
+    `${BACKEND_PROXY}/api/admin/overview/products`,
+    { signal },
+  );
+}
+
+export function getOverviewTimeline(
+  params: {
+    timeWindow: OverviewTimeWindow;
+    product?: string;
+    tzOffset?: number;
+  },
+  signal?: AbortSignal,
+): Promise<OverviewTimelineResponse> {
+  const q = new URLSearchParams({
+    time_window: params.timeWindow,
+    product: params.product ?? "all",
+    tz_offset: String(params.tzOffset ?? new Date().getTimezoneOffset()),
+  });
+  return apiFetch<OverviewTimelineResponse>(
+    `${BACKEND_PROXY}/api/admin/overview/timeline?${q.toString()}`,
+    { signal },
+    true,
+  );
+}
+
+export function getOverviewUserStats(
+  params: {
+    timeWindow: OverviewTimeWindow;
+    product?: string;
+    tzOffset?: number;
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    orderBy?: string;
+    descending?: boolean;
+    activeOnly?: boolean;
+  },
+  signal?: AbortSignal,
+): Promise<OverviewUserStatsResponse> {
+  const q = new URLSearchParams({
+    time_window: params.timeWindow,
+    product: params.product ?? "all",
+    tz_offset: String(params.tzOffset ?? new Date().getTimezoneOffset()),
+    page: String(params.page ?? 1),
+    page_size: String(params.pageSize ?? 10),
+  });
+  if (params.search) q.set("search", params.search);
+  if (params.orderBy) q.set("order_by", params.orderBy);
+  if (params.descending !== undefined) q.set("descending", String(params.descending));
+  if (params.activeOnly !== undefined) q.set("active_only", String(params.activeOnly));
+
+  return apiFetch<OverviewUserStatsResponse>(
+    `${BACKEND_PROXY}/api/admin/overview/user-stats?${q.toString()}`,
+    { signal },
+    true,
+  );
 }

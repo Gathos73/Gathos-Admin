@@ -1,5 +1,7 @@
 "use client";
 
+import { clearRequestCache } from "@/lib/request-cache";
+
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -9,6 +11,16 @@ import {
   deleteResource,
   listResource,
 } from "../lib/api";
+import {
+  cacheProducts,
+  EMPTY_CATALOG_INLINE_DRAFTS,
+  newProductLimitDraft,
+  PRODUCT_CACHE,
+  serializePlanLimitDrafts,
+  serializeProductRouteDrafts,
+  type CatalogInlineDrafts,
+} from "../lib/catalog-inline-drafts";
+
 import { getResourceConfig } from "../lib/resources";
 import type { JsonObject, ResourceKey, ResourceRecord } from "../lib/types";
 import { ConfirmDialog } from "./confirm-dialog";
@@ -23,6 +35,8 @@ import {
 } from "./icons";
 import { recordLabel } from "./record-detail";
 import { RecordForm } from "./record-form";
+import { PlanLimitsCreateInline } from "./plan-limits-inline";
+import { ProductRoutesCreateInline } from "./product-routes-inline";
 import { ToastViewport, useToast } from "./toast";
 import { useDialogFocus } from "./use-dialog-focus";
 
@@ -176,13 +190,60 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
   const searchDraft = searchDraftOverride ?? search;
   const filterDraft = filterDraftOverride ?? filterValue;
   const [drawer, setDrawer] = useState<DrawerState>({ mode: "closed" });
+  const [inlineDrafts, setInlineDrafts] = useState<CatalogInlineDrafts>(
+    EMPTY_CATALOG_INLINE_DRAFTS,
+  );
+  const [inlineError, setInlineError] = useState("");
+  const [planProducts, setPlanProducts] = useState<{ id: string; code: string; name: string }[]>([]);
+  const [productCatalog, setProductCatalog] = useState<{ id: string; code: string; name: string }[]>([]);
+
+  useEffect(() => {
+    if (resourceKey !== "plans") return;
+    let active = true;
+    listResource("products", { page: 1, pageSize: 200, orderBy: "code", descending: false })
+      .then((res) => {
+        if (!active) return;
+        cacheProducts(res.rows);
+        const catalog = res.rows.map((r) => ({
+          id: String(r.id),
+          code: String(r.code ?? ""),
+          name: String(r.name ?? r.display_name ?? r.code ?? ""),
+        }));
+        setProductCatalog(catalog);
+        setPlanProducts((prev) =>
+          prev.map((p) => {
+            const found = catalog.find((c) => c.id === p.id);
+            return found ? { ...p, code: found.code, name: found.name } : p;
+          }),
+        );
+        setInlineDrafts((current) => ({
+          ...current,
+          planLimits: current.planLimits.map((d) => {
+            const found = catalog.find((c) => c.id === d.productId);
+            return found
+              ? { ...d, productCode: found.code || d.productCode, productName: found.name || d.productName }
+              : d;
+          }),
+        }));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [resourceKey]);
+
   const [submitting, setSubmitting] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<JsonObject | null>(null);
+
   const [deleteRequest, setDeleteRequest] = useState<DeleteRequest | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
   const [secretCopied, setSecretCopied] = useState(false);
   const drawerOpen = drawer.mode !== "closed";
-  const dialogOpen = Boolean(deleteRequest) || Boolean(secret);
+  const dialogOpen = Boolean(deleteRequest) || Boolean(secret) || Boolean(pendingPlan);
+  const planConfirmRef = useDialogFocus<HTMLElement>({
+    open: Boolean(pendingPlan), onEscape: submitting ? undefined : () => setPendingPlan(null),
+  });
   const drawerDialogRef = useDialogFocus<HTMLElement>({
     onEscape: submitting ? undefined : () => setDrawer({ mode: "closed" }),
     open: drawerOpen && !dialogOpen,
@@ -243,7 +304,16 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
     };
   }, [descending, filterBy, filterValue, hasFilterValue, orderBy, page, pageSize, requestKey, resourceKey, search, searchField]);
 
-  const refresh = () => setRefreshVersion((version) => version + 1);
+  const refresh = () => { clearRequestCache(); setRefreshVersion((version) => version + 1); };
+
+  const openCreate = () => {
+    setInlineDrafts({ planLimits: [], productRoutes: [] });
+    setInlineError("");
+    setPlanProducts([]);
+    setDrawer({ mode: "create" });
+  };
+
+  const closeCreate = () => setDrawer({ mode: "closed" });
 
   const submitSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -278,20 +348,55 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
   };
 
   const submitRecord = async (payload: JsonObject) => {
+    if (drawer.mode !== "create") return;
+    const createPayload: JsonObject = { ...payload };
+    if (resourceKey === "plans") {
+      const productIds = Array.isArray(payload.product_ids)
+        ? payload.product_ids.map(String)
+        : planProducts.map((p) => p.id);
+      const result = serializePlanLimitDrafts(inlineDrafts.planLimits, productIds);
+      if (result.error) {
+        setInlineError(result.error);
+        pushToast(result.error, "error");
+        return;
+      }
+      createPayload.plan_limits = result.rows ?? [];
+    } else if (resourceKey === "products") {
+      const result = serializeProductRouteDrafts(inlineDrafts.productRoutes);
+      if (result.error) {
+        setInlineError(result.error);
+        pushToast(result.error, "error");
+        return;
+      }
+      createPayload.product_routes = result.rows ?? [];
+    }
+
+    setInlineError("");
+    if (resourceKey === "plans" && Number(createPayload.price_minor) > 0 && !createPayload.provider_price_id) {
+      setPendingPlan(createPayload);
+      return;
+    }
+    await saveNewRecord(createPayload);
+  };
+
+  const saveNewRecord = async (createPayload: JsonObject) => {
+    setInlineError("");
     setSubmitting(true);
     try {
-      if (drawer.mode !== "create") return;
-      const response = await createResource(config, payload);
+      const response = await createResource(config, createPayload);
       const createdSecret = firstSecret(response, config.secretResponseFields ?? []);
       if (createdSecret) {
         setSecret(createdSecret);
         setSecretCopied(false);
       }
       pushToast(`${config.labelSingular} created.`, "success");
-      setDrawer({ mode: "closed" });
+      setPendingPlan(null);
+      closeCreate();
       refresh();
     } catch (error) {
-      pushToast(getErrorMessage(error), "error");
+      const message = getErrorMessage(error);
+      if (resourceKey === "plans" || resourceKey === "products") setInlineError(message);
+      pushToast(message, "error");
     } finally {
       setSubmitting(false);
     }
@@ -350,7 +455,7 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
             Refresh
           </button>
           {config.canCreate ? (
-            <button className="button button--primary" onClick={() => setDrawer({ mode: "create" })} type="button">
+            <button className="button button--primary" onClick={openCreate} type="button">
               <PlusIcon size={16} />
               Add {config.labelSingular}
             </button>
@@ -542,13 +647,13 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
           className="drawer-backdrop"
           inert={dialogOpen ? true : undefined}
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !submitting) setDrawer({ mode: "closed" });
+            if (event.target === event.currentTarget && !submitting) closeCreate();
           }}
         >
           <aside
             aria-labelledby="record-drawer-title"
             aria-modal="true"
-            className="record-drawer"
+            className={`record-drawer${resourceKey === "plans" || resourceKey === "products" ? " record-drawer--with-inlines" : ""}`}
             ref={drawerDialogRef}
             role="dialog"
             tabIndex={-1}
@@ -562,7 +667,7 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
                 aria-label="Close drawer"
                 className="icon-button"
                 disabled={submitting}
-                onClick={() => setDrawer({ mode: "closed" })}
+                onClick={closeCreate}
                 type="button"
               >
                 <CloseIcon size={19} />
@@ -573,15 +678,83 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
                 config={config}
                 key={`create-${resourceKey}`}
                 mode="create"
-                onCancel={() => setDrawer({ mode: "closed" })}
+                onCancel={closeCreate}
+                onFieldValueChange={(name, value) => {
+                  if (resourceKey !== "plans" || name !== "product_ids") return;
+                  setInlineError("");
+                  let productIds: string[] = [];
+                  try {
+                    const parsed = JSON.parse(String(value || "[]"));
+                    if (Array.isArray(parsed)) productIds = parsed.map(String);
+                  } catch {
+                    productIds = [];
+                  }
+                  const productIdSet = new Set(productIds);
+                  // Build product metadata from loaded product catalog and cache
+                  const freshProducts = productIds.map((id) => {
+                    const row = PRODUCT_CACHE.get(id) || productCatalog.find((r) => r.id === id);
+                    return { id, code: row ? row.code : "", name: row ? row.name : "" };
+                  });
+
+
+                  setPlanProducts(freshProducts);
+                  setInlineDrafts((current) => {
+                    const currentDraftIds = new Set(current.planLimits.map((d) => d.productId));
+                    // Remove drafts for deselected products
+                    const kept = current.planLimits.filter((d) => productIdSet.has(d.productId));
+                    // Add a blank draft for each newly-selected product
+                    const newDrafts = freshProducts
+                      .filter((p) => !currentDraftIds.has(p.id))
+                      .map((p) => newProductLimitDraft(crypto.randomUUID(), p.id, p.code, p.name));
+                    return { ...current, planLimits: [...kept, ...newDrafts] };
+                  });
+                }}
                 onSubmit={submitRecord}
                 submitting={submitting}
-              />
+              >
+                {resourceKey === "plans" ? (
+                  <PlanLimitsCreateInline
+                    allowedProducts={planProducts}
+                    drafts={inlineDrafts.planLimits}
+                    error={inlineError}
+                    onChange={(planLimits) => {
+                      setInlineError("");
+                      setInlineDrafts((current) => ({ ...current, planLimits }));
+                    }}
+                    submitting={submitting}
+                  />
+                ) : null}
+                {resourceKey === "products" ? (
+                  <ProductRoutesCreateInline
+                    drafts={inlineDrafts.productRoutes}
+                    error={inlineError}
+                    onChange={(productRoutes) => {
+                      setInlineError("");
+                      setInlineDrafts((current) => ({ ...current, productRoutes }));
+                    }}
+                    submitting={submitting}
+                  />
+                ) : null}
+              </RecordForm>
             </div>
           </aside>
         </div>
       ) : null}
 
+      {pendingPlan ? (
+        <div className="modal-backdrop">
+          <section ref={planConfirmRef} tabIndex={-1} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="create-dodo-title">
+            <div className="dialog-header"><h2 id="create-dodo-title">Create a matching Dodo product?</h2></div>
+            <p className="dialog-description">Create “{String(pendingPlan.display_name)}” in Dodo with {String(pendingPlan.price_minor)} minor units in {String(pendingPlan.currency)}, billed {pendingPlan.billing_interval === "none" ? "once" : `every ${String(pendingPlan.billing_interval)}`}? Checkout becomes available after syncing succeeds. Later edits will not create or update a Dodo product.</p>
+            {inlineError ? <p className="form-error" role="alert">{inlineError}</p> : null}
+            <div className="dialog-actions">
+              <button type="button" className="button button--secondary" disabled={submitting} onClick={() => setPendingPlan(null)}>Back</button>
+              <button type="button" className="button button--secondary" disabled={submitting} onClick={() => void saveNewRecord({ ...pendingPlan, create_dodo_product: false })}>Create locally only</button>
+              <button type="button" className="button button--primary" disabled={submitting} onClick={() => void saveNewRecord({ ...pendingPlan, create_dodo_product: true })}>{submitting ? "Creating…" : "Create plan and Dodo product"}</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
       <ConfirmDialog
         busy={deleting}
         confirmLabel={deleteRequest && deleteRequest.ids.length > 1 ? "Delete records" : "Delete record"}
