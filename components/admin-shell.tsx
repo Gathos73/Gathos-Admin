@@ -62,6 +62,7 @@ const NAV_ITEMS: NavItem[] = [
     keywords: "gpu health capacity active free queue scheduler workers",
     label: "GPU health",
   },
+  { href: "/gpus", label: "GPUs & Services", description: "Register GPU servers, collectors and ML services", icon: GpuIcon, keywords: "gpu registry compute image video tts music collector endpoint" },
   { href: "/products", label: "Products", description: "Manage products", icon: ProductIcon, keywords: "catalog products" },
   // { href: "/product-routes", label: "Product routes", description: "Manage product routes", icon: TierIcon, keywords: "catalog product_routes", hideFromSidebar: true },
   { href: "/plans", label: "Plans", description: "Manage plans", icon: TierIcon, keywords: "catalog plans" },
@@ -233,7 +234,7 @@ export function AdminShell({ children, email }: { children: ReactNode; email?: s
 
         <nav aria-label="Admin navigation" className="sidebar-nav">
           <p className="sidebar-section-label">Overview</p>
-          {NAV_ITEMS.filter((item) => item.href === "/" || item.href === "/gpu-health").map((item) => {
+          {NAV_ITEMS.filter((item) => item.href === "/" || item.href === "/gpu-health" || item.href === "/gpus").map((item) => {
             const Icon = item.icon;
             const active = isActivePath(pathname, item.href);
             return (
@@ -341,7 +342,7 @@ export function AdminShell({ children, email }: { children: ReactNode; email?: s
                 <>
                   <Link href={currentItem.href}>{currentItem.label}</Link>
                   <ChevronRightIcon />
-                  <strong>{pathname.endsWith("/edit") ? "Edit record" : "View record"}</strong>
+                  <strong>{pathname === "/gpus/new" ? "Add GPU" : currentItem.href === "/gpus" ? "Manage GPU" : pathname.endsWith("/edit") ? "Edit record" : "View record"}</strong>
                 </>
               ) : (
                 <strong>{currentItem?.label || "Dashboard"}</strong>

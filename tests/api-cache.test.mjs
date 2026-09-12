@@ -31,3 +31,19 @@ test('GPU health refreshes always request a fresh scheduler snapshot', async (t)
   assert.equal((await api.getGpuHealth()).version, 1);
   assert.equal((await api.getGpuHealth()).version, 2);
 });
+
+test('registry mutations forward idempotency and revision headers through authenticated BFF', async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (path, init) => {
+    calls.push({ path, ...init }); return Response.json({ gpu_id: 'gpu-one' });
+  });
+  await api.createComputeGpu({ name: 'GPU one' }, 'create-attempt');
+  await api.updateComputeGpu('gpu-one', { name: 'GPU one' }, '"gpu:gpu-one:revision:3"');
+  await api.drainComputeGpu('gpu-one', '"gpu:gpu-one:revision:3"', 'service-one');
+  assert.equal(calls[0].headers.get('Idempotency-Key'), 'create-attempt');
+  assert.equal(calls[1].headers.get('If-Match'), '"gpu:gpu-one:revision:3"');
+  assert.equal(calls[1].method, 'PUT');
+  assert.equal(calls[2].path, '/api/backend/api/admin/compute/gpus/gpu-one/services/service-one/drain');
+  assert.equal(calls[2].headers.get('If-Match'), '"gpu:gpu-one:revision:3"');
+  assert.ok(calls.every((call) => call.credentials === 'include'));
+});

@@ -1,4 +1,5 @@
 import { cachedRequest, clearRequestCache } from "./request-cache";
+import type { CredentialWrite, GpuList, GpuWrite, RegisteredGpu } from "./compute-registry";
 
 import type {
   JsonObject,
@@ -233,6 +234,41 @@ export function getGpuHealth(signal?: AbortSignal): Promise<GpuHealthSnapshot> {
     { signal },
     true,
   );
+}
+
+export function listComputeGpus(afterId?: string, signal?: AbortSignal): Promise<GpuList> {
+  const query = new URLSearchParams({ limit: "50" });
+  if (afterId) query.set("after_id", afterId);
+  return apiFetch(`${BACKEND_PROXY}/api/admin/compute/gpus?${query}`, { signal }, true);
+}
+
+export function getComputeGpu(id: string, signal?: AbortSignal): Promise<RegisteredGpu> {
+  return apiFetch(`${BACKEND_PROXY}/api/admin/compute/gpus/${encodeURIComponent(id)}`, { signal }, true);
+}
+
+export function createComputeCredential(body: CredentialWrite, key: string): Promise<{ credential_ref: string }> {
+  return apiFetch(`${BACKEND_PROXY}/api/admin/compute/credentials`, {
+    method: "POST", headers: { "Idempotency-Key": key }, body: JSON.stringify(body),
+  });
+}
+
+export function createComputeGpu(body: GpuWrite, key: string): Promise<RegisteredGpu> {
+  return apiFetch(`${BACKEND_PROXY}/api/admin/compute/gpus`, {
+    method: "POST", headers: { "Idempotency-Key": key }, body: JSON.stringify(body),
+  });
+}
+
+export function updateComputeGpu(id: string, body: GpuWrite, etag: string): Promise<RegisteredGpu> {
+  return apiFetch(`${BACKEND_PROXY}/api/admin/compute/gpus/${encodeURIComponent(id)}`, {
+    method: "PUT", headers: { "If-Match": etag }, body: JSON.stringify(body),
+  });
+}
+
+export function drainComputeGpu(id: string, etag: string, serviceId?: string): Promise<RegisteredGpu> {
+  const suffix = serviceId ? `/services/${encodeURIComponent(serviceId)}/drain` : "/drain";
+  return apiFetch(`${BACKEND_PROXY}/api/admin/compute/gpus/${encodeURIComponent(id)}${suffix}`, {
+    method: "POST", headers: { "If-Match": etag },
+  });
 }
 
 export type OverviewTimeWindow = "current_window" | "24h" | "7d";

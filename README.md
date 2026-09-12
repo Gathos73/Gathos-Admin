@@ -13,6 +13,28 @@ behind the existing FastAPI admin authorization checks.
 - Newsletter subscribers
 - Affiliates
 - Generations
+- GPUs and ML services (including collector configuration and credentials)
+
+## GPU and service registry
+
+Open **GPUs & Services** in the sidebar (`/gpus`). **Add GPU** registers a server,
+its required collector and one or more image, image-to-image, TTS, video or music
+services. Open a GPU to edit endpoints and credentials or use **Add service** to
+attach another product to the same GPU. Existing services are retained on edits.
+Draining stops new work while allowing an active execution to finish.
+
+Credentials are submitted through the authenticated admin BFF and encrypted by
+the backend; saved secrets are never read back into the form. Create requests
+use idempotency keys, and updates use the GPU revision to prevent overwriting
+concurrent edits. Failed, ambiguous saves retain their original request for retry
+while the form remains open. Reload the saved record to resolve conflicting edits.
+
+The backend requires migrations `0013` and `0014`, its registry encryption key,
+and approved GPU hosts/IP ranges before registration. Configure its proxy webhook
+to publish changes automatically. See the [backend setup guide](../backend/docs/compute-registry.md)
+and [proxy setup guide](../KokoLearn-RedisProxy/docs/compute-registry.md).
+GPU inventory status is desired configuration and reservation state; use
+**GPU health** for the existing scheduler health view.
 
 ## Local development
 
