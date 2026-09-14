@@ -12,21 +12,28 @@ import type {
 
 const BACKEND_PROXY = "/api/backend";
 
+export type ResourceMetrics = {
+  cpu_percent: number | null; uptime_seconds: number | null;
+  memory: { total_bytes: number | null; used_bytes: number | null; used_percent: number | null };
+  swap: { total_bytes: number | null; used_bytes: number | null; used_percent: number | null };
+  network: { bytes_sent_per_second: number | null; bytes_received_per_second: number | null };
+  disks: { path: string; total_bytes: number | null; used_bytes: number | null; used_percent: number | null }[];
+  devices: { name: string; hardware_uuid: string; utilization_percent: number | null; memory_used_mib: number | null; memory_total_mib: number | null; memory_used_percent: number | null; temperature_celsius: number | null; power_watts: number | null }[];
+};
+export type GpuReading = {
+  health: "healthy" | "degraded" | "stale" | "unavailable" | "identity_mismatch";
+  sampled_at: string | null; metrics: ResourceMetrics | null;
+};
+export type MonitoredGpu = GpuReading & {
+  gpu_id: string; revision: number; name: string; gpu_model: string | null; hardware_uuid: string | null;
+  server_id: string; desired_state: string; reservation_state: string | null;
+  services: { service_id: string; service_type: string; desired_state: string }[];
+};
 export type GpuHealthSnapshot = {
-  capacity: {
-    available: boolean;
-    free_slots: number;
-    healthy_slots: number;
-    observed_at: string | null;
-    queue_depth: number | null;
-  };
-  scheduler: {
-    api_enabled: boolean;
-    mode: string;
-    policy_version: string;
-    source: string | null;
-    worker_lease_api_enabled: boolean;
-  };
+  items: MonitoredGpu[]; total: number; observed_at: string; next_after_id: string | null;
+};
+export type GpuHistory = {
+  items: (GpuReading & { id: number })[]; start: string; end: string; next_after_id: number | null; retention_days: number;
 };
 
 export class ApiError extends Error {
@@ -228,12 +235,17 @@ export function getResourceCount(resource: ResourceKey): Promise<{ total: number
   return apiFetch(`${BACKEND_PROXY}/api/admin/resources/${resource}/count`);
 }
 
-export function getGpuHealth(signal?: AbortSignal): Promise<GpuHealthSnapshot> {
+export function getGpuHealth(signal?: AbortSignal, afterId?: string): Promise<GpuHealthSnapshot> {
   return apiFetch<GpuHealthSnapshot>(
-    `${BACKEND_PROXY}/api/admin/gpu-health`,
+    `${BACKEND_PROXY}/api/admin/gpu-health${afterId ? `?after_id=${encodeURIComponent(afterId)}` : ""}`,
     { signal },
     true,
   );
+}
+
+export function getGpuHistory(id: string, start: string, end: string, afterId = 0, signal?: AbortSignal): Promise<GpuHistory> {
+  const query = new URLSearchParams({ start, end, after_id: String(afterId) });
+  return apiFetch(`${BACKEND_PROXY}/api/admin/gpu-health/${encodeURIComponent(id)}/history?${query}`, { signal }, true);
 }
 
 export function listComputeGpus(afterId?: string, signal?: AbortSignal): Promise<GpuList> {

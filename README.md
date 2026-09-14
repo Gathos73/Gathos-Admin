@@ -162,3 +162,18 @@ plan; granting paid access without a subscription requires the comped setting.
 
 `SESSION_SECRET` is optional for rollout: unset deployments retain backend verification.
 Keep it server-only; configuring it gives this server signing capability as well as verification.
+
+GPU health at `/gpu-health` now reads registered GPUs and their collectors through
+admin-only backend endpoints. The inventory includes every product and refreshes
+every 15 seconds while visible. Selecting a GPU shows system/device measurements,
+configuration and reservation state. Collector telemetry is distinct from model
+readiness; unreachable, stale and mismatched collectors are explicitly labeled.
+Hardware UUIDs select one device; without a UUID the page labels device data as
+covering the whole collector host. Collector URLs and credentials stay server-side.
+
+History is fetched on demand from each collector's existing seven-day SQLite
+retention. The selected range is fixed while paging; charts show the actual loaded
+sample timestamps, with gaps for missing readings. Pages contain 100 samples,
+oldest first, and **Load next 100 samples** retrieves more. History is not copied
+into Supabase. Deploy the matching backend monitoring endpoints with this admin
+version; no database migration or Redis Proxy changes are needed.

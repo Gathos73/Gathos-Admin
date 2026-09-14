@@ -23,7 +23,7 @@ test('API reads cache across navigation and mutations invalidate them', async (t
   assert.equal((await read()).version, 4);
 });
 
-test('GPU health refreshes always request a fresh scheduler snapshot', async (t) => {
+test('GPU health refreshes always request a fresh collector snapshot', async (t) => {
   globalThis.window = {};
   t.after(() => { delete globalThis.window; clearRequestCache(); });
   let calls = 0;

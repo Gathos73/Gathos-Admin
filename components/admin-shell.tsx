@@ -56,10 +56,10 @@ const NAV_ITEMS: NavItem[] = [
     label: "Dashboard",
   },
   {
-    description: "Live GPU capacity and scheduler status",
+    description: "Registered GPU resource status and collector history",
     href: "/gpu-health",
     icon: GpuIcon,
-    keywords: "gpu health capacity active free queue scheduler workers",
+    keywords: "gpu health collector cpu ram vram temperature network history monitoring",
     label: "GPU health",
   },
   { href: "/gpus", label: "GPUs & Services", description: "Register GPU servers, collectors and ML services", icon: GpuIcon, keywords: "gpu registry compute image video tts music collector endpoint" },

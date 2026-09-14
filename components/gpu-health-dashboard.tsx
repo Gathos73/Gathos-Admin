@@ -1,241 +1,154 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { GpuIcon, RefreshIcon } from "@/components/icons";
+import { getGpuHealth, getGpuHistory, type GpuHealthSnapshot, type GpuHistory, type GpuReading, type MonitoredGpu } from "@/lib/api";
 
-import { AlertIcon, CheckIcon, GpuIcon, RefreshIcon } from "@/components/icons";
-import { ApiError, getGpuHealth, type GpuHealthSnapshot } from "@/lib/api";
+const LABELS: Record<GpuReading["health"], string> = { healthy: "Healthy telemetry", degraded: "Partial telemetry", stale: "Stale readings", unavailable: "Collector unavailable", identity_mismatch: "Identity mismatch" };
+const PRODUCT_NAMES: Record<string, string> = { image: "Image", image_to_image: "Image to image", tts: "Text to speech", video: "Video", music: "Music" };
+const RANGES = [{ label: "15 minutes", minutes: 15 }, { label: "1 hour", minutes: 60 }, { label: "24 hours", minutes: 1440 }, { label: "7 days", minutes: 10080 }];
+const time = (value: string | null) => value ? new Date(value).toLocaleString() : "No sample";
+const measurement = (value: number | null | undefined, unit = "") => value == null ? "—" : `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${unit}`;
+const bytes = (value: number | null | undefined) => value == null ? "—" : value >= 1073741824 ? measurement(value / 1073741824, " GiB") : measurement(value / 1048576, " MiB");
+const message = (error: unknown) => error instanceof Error ? error.message : "Monitoring is temporarily unavailable.";
 
-const REFRESH_INTERVAL_MS = 15_000;
-
-function formatTimestamp(value: string | null): string {
-  if (!value) return "Not reported";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "medium",
-  }).format(date);
+function Metric({ label, value, detail }: { label: string; value: string; detail?: string }) {
+  return <article className="gpu-metric-card"><span className="gpu-metric-label">{label}</span><strong>{value}</strong>{detail && <small>{detail}</small>}</article>;
 }
 
-function displayError(error: unknown): string {
-  if (error instanceof ApiError) return error.message;
-  return error instanceof Error ? error.message : "GPU health is temporarily unavailable.";
+function Chart({ title, points, value }: { title: string; points: GpuHistory["items"]; value: (point: GpuHistory["items"][number]) => number | null | undefined }) {
+  const dated = points.filter((point) => point.sampled_at).map((point) => ({ point, at: Date.parse(point.sampled_at!) })).sort((a, b) => a.at - b.at);
+  const start = dated[0]?.at ?? 0;
+  const end = dated.at(-1)?.at ?? start;
+  const segments: string[] = [];
+  let drawing = false;
+  let previous = 0;
+  let valid = 0;
+  for (const { point, at } of dated) {
+    const reading = value(point);
+    if (reading == null || !Number.isFinite(reading)) { drawing = false; continue; }
+    if (at - previous > 60_000) drawing = false;
+    const x = 35 + (end === start ? 0 : (at - start) / (end - start)) * 535;
+    const y = 125 - Math.min(100, Math.max(0, reading));
+    segments.push(`${drawing ? "L" : "M"}${x.toFixed(2)},${y.toFixed(2)}`, `l0.1,0`);
+    drawing = true; previous = at; valid++;
+  }
+  return <article className="monitor-chart"><h3>{title}</h3>{valid ? <>
+    <svg viewBox="0 0 600 150" role="img" aria-label={`${title}, 0 to 100 percent, ${valid} readings`}>
+      {[0, 50, 100].map((n) => <g key={n}><line x1="35" x2="570" y1={125 - n} y2={125 - n} stroke="currentColor" opacity="0.12" /><text x="0" y={129 - n} fill="currentColor" fontSize="11">{n}%</text></g>)}
+      <path d={segments.join(" ")} fill="none" stroke="var(--monitor-accent, #267953)" strokeWidth="2" strokeLinecap="round" />
+    </svg><p>{time(dated[0]?.point.sampled_at ?? null)} — {time(dated.at(-1)?.point.sampled_at ?? null)}</p>
+  </> : <p className="empty-state">No measurements in the loaded samples.</p>}</article>;
 }
 
-function FeatureStatus({ enabled }: { enabled: boolean }) {
-  return (
-    <span className={`gpu-feature-status ${enabled ? "is-enabled" : "is-disabled"}`}>
-      {enabled ? "Enabled" : "Disabled"}
-    </span>
-  );
+function History({ gpu }: { gpu: MonitoredGpu }) {
+  const [minutes, setMinutes] = useState(15);
+  const [version, setVersion] = useState(0);
+  const [page, setPage] = useState<GpuHistory | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [moreBusy, setMoreBusy] = useState(false);
+  const moreController = useRef<AbortController | null>(null);
+  const moreInFlight = useRef(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    const end = new Date();
+    const start = new Date(end.getTime() - minutes * 60_000);
+    const timer = setTimeout(() => {
+      setPage(null); setLoading(true); setError(""); setMoreBusy(false);
+      void getGpuHistory(gpu.gpu_id, start.toISOString(), end.toISOString(), 0, controller.signal).then((data) => {
+        if (!controller.signal.aborted) setPage(data);
+      }).catch((e) => { if (!controller.signal.aborted) setError(message(e)); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    }, 0);
+    return () => { clearTimeout(timer); controller.abort(); moreController.current?.abort(); moreInFlight.current = false; };
+  }, [gpu.gpu_id, minutes, version]);
+  async function loadMore() {
+    if (!page || page.next_after_id == null || moreInFlight.current) return;
+    moreInFlight.current = true; setMoreBusy(true);
+    const controller = new AbortController(); moreController.current = controller;
+    try {
+      const next = await getGpuHistory(gpu.gpu_id, page.start, page.end, page.next_after_id, controller.signal);
+      if (!controller.signal.aborted) {
+        setPage({ ...next, items: [...page.items, ...next.items] }); setError("");
+      }
+    } catch (e) { if (!controller.signal.aborted) setError(message(e)); }
+    finally { if (!controller.signal.aborted) { setMoreBusy(false); moreInFlight.current = false; } }
+  }
+  const devices = new Map<string, string>();
+  for (const point of page?.items ?? []) for (const device of point.metrics?.devices ?? []) devices.set(device.hardware_uuid, device.name);
+  return <section className="gpu-panel monitor-history" aria-label="Resource history">
+    <div className="compute-section-heading"><div><h2>Resource history</h2><p>Seven days retained on this GPU server. Samples load on demand, oldest first within the selected range.</p></div>
+      <div className="monitor-controls"><label>Time range <select value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>{RANGES.map((range) => <option value={range.minutes} key={range.minutes}>{range.label}</option>)}</select></label>
+      <button type="button" className="button button--secondary" disabled={loading || moreBusy} onClick={() => setVersion((v) => v + 1)}>Refresh history</button></div>
+    </div>
+    {error && <p className="compute-notice compute-notice--error" role="alert">{error === "collector_history_unavailable" ? "The collector’s stored history could not be read. Check that it is reachable and supports /v1/history." : error === "collector_identity_mismatch" ? "Historical samples do not match the registered collector or GPU identity." : error}</p>}
+    {loading ? <p role="status">Loading history…</p> : page && !page.items.length ? <p className="empty-state">No retained samples in this time range.</p> : page && <>
+      <p>{page.items.length.toLocaleString()} samples loaded{page.next_after_id != null ? " · More samples available" : " · All available samples loaded"}. Missing measurements appear as gaps.</p>
+      <div className="monitor-chart-grid"><Chart title="CPU utilization" points={page.items} value={(p) => p.metrics?.cpu_percent} /><Chart title="RAM usage" points={page.items} value={(p) => p.metrics?.memory.used_percent} />
+      {[...devices].map(([id, name]) => <Chart key={id} title={`${name} · GPU utilization`} points={page.items} value={(p) => p.metrics?.devices.find((d) => d.hardware_uuid === id)?.utilization_percent} />)}</div>
+      {page.next_after_id != null && <button className="button button--secondary" disabled={moreBusy} onClick={() => void loadMore()} type="button">{moreBusy ? "Loading…" : "Load next 100 samples"}</button>}
+    </>}
+  </section>;
 }
 
 export function GpuHealthDashboard() {
-  const requestInFlight = useRef(false);
   const [snapshot, setSnapshot] = useState<GpuHealthSnapshot | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const refresh = useCallback(async (background = false) => {
-    if (requestInFlight.current) return;
-    requestInFlight.current = true;
-    if (!background) setRefreshing(true);
-    try {
-      const next = await getGpuHealth();
-      setSnapshot(next);
-      setError("");
-    } catch (requestError) {
-      setError(displayError(requestError));
-    } finally {
-      setLoading(false);
-      if (!background) setRefreshing(false);
-      requestInFlight.current = false;
-    }
-  }, []);
-
+  const [cursor, setCursor] = useState<string>();
+  const [back, setBack] = useState<(string | undefined)[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [version, setVersion] = useState(0);
   useEffect(() => {
-    const initial = window.setTimeout(() => void refresh(true), 0);
-    const interval = window.setInterval(() => void refresh(true), REFRESH_INTERVAL_MS);
-    return () => {
-      window.clearTimeout(initial);
-      window.clearInterval(interval);
-    };
-  }, [refresh]);
-
-  if (loading && !snapshot) {
-    return (
-      <div aria-busy="true" aria-label="Loading GPU health" className="gpu-health-page">
-        <div className="skeleton skeleton--gpu-hero" />
-        <div className="gpu-metric-grid">
-          {Array.from({ length: 4 }, (_, index) => (
-            <div className="skeleton skeleton--gpu-metric" key={index} />
-          ))}
-        </div>
-        <div className="gpu-panel-grid">
-          <div className="skeleton skeleton--gpu-panel" />
-          <div className="skeleton skeleton--gpu-panel" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!snapshot) {
-    return (
-      <div className="gpu-health-page">
-        <section className="gpu-empty-state" role="alert">
-          <span className="state-icon state-icon--error"><AlertIcon /></span>
-          <p className="section-kicker">Status unavailable</p>
-          <h1>GPU health could not be loaded</h1>
-          <p>{error}</p>
-          <button className="button button--primary" disabled={refreshing} onClick={() => void refresh()} type="button">
-            <RefreshIcon className={refreshing ? "spin" : undefined} />
-            {refreshing ? "Refreshing…" : "Try again"}
-          </button>
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    async function refresh(initial: boolean) {
+      if (controller.signal.aborted) return;
+      if (initial) setLoading(true);
+      try {
+        if (initial || document.visibilityState === "visible") {
+          const next = await getGpuHealth(controller.signal, cursor);
+          if (!controller.signal.aborted) { setSnapshot(next); setError(""); }
+        }
+      } catch (e) { if (!controller.signal.aborted) setError(message(e)); }
+      finally {
+        if (!controller.signal.aborted) { setLoading(false); timer = setTimeout(() => void refresh(false), 15_000); }
+      }
+    }
+    timer = setTimeout(() => void refresh(true), 0);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [cursor, version]);
+  const selected = snapshot?.items.find((g) => g.gpu_id === selectedId) ?? snapshot?.items[0];
+  const metrics = selected?.metrics;
+  function navigate(next?: string) { setSnapshot(null); setCursor(next); }
+  return <div className="gpu-health-page monitor-page">
+    <header className="gpu-health-hero"><div className="gpu-health-heading"><span className="eyebrow-badge">Registered infrastructure</span><h1>GPU health</h1><p>Live collector readings across Image, Video, TTS and Music services.</p></div>
+      <div className="gpu-health-actions"><Link href="/gpus" className="button button--secondary">Manage GPUs</Link><button className="button button--secondary" type="button" disabled={loading} onClick={() => setVersion((v) => v + 1)}><RefreshIcon size={15} />{loading ? "Refreshing…" : "Refresh"}</button></div></header>
+    {error && <p className="compute-notice compute-notice--error" role="alert">{snapshot ? "Refresh failed. Showing the last available readings. " : "Unable to load GPU monitoring. "}{error}</p>}
+    {loading && !snapshot ? <p className="empty-state" role="status">Loading registered GPU collectors…</p> : snapshot && <>
+      <section className="gpu-metric-grid" aria-label="Registry overview"><Metric label="Registered GPUs" value={String(snapshot.total)} detail="Includes disabled and draining GPUs" /><Metric label="Fresh healthy telemetry" value={error ? "—" : String(snapshot.items.filter((g) => g.health === "healthy").length)} detail="On this page" /><Metric label="Needs attention" value={error ? "—" : String(snapshot.items.filter((g) => g.health !== "healthy").length)} detail="On this page" /><Metric label="Reserved GPUs" value={String(snapshot.items.filter((g) => g.reservation_state).length)} detail="On this page · shared across products" /></section>
+      {!snapshot.total ? <div className="gpu-empty-state"><GpuIcon /><h2>No GPUs registered</h2><p>Add a GPU with its collector to start monitoring.</p><Link className="button button--primary" href="/gpus/new">Add GPU</Link></div> : <>
+        <section className="gpu-panel"><div className="compute-section-heading"><h2>GPU inventory</h2><span>Last successful refresh: {time(snapshot.observed_at)}</span></div>
+          <div className="compute-table-wrap"><table className="compute-table monitor-table"><thead><tr><th>GPU</th><th>Collector</th><th>Products</th><th>Configuration</th><th>Reservation</th><th>CPU</th><th>RAM</th></tr></thead><tbody>{snapshot.items.map((g) => <tr key={g.gpu_id} aria-selected={selected?.gpu_id === g.gpu_id}>
+            <td><button className="monitor-select" type="button" onClick={() => setSelectedId(g.gpu_id)} aria-pressed={selected?.gpu_id === g.gpu_id}>{g.name}</button><small>{g.gpu_model || g.server_id}</small></td><td><span className={`monitor-state monitor-state--${error ? "stale" : g.health}`}>{error ? "Last reading" : LABELS[g.health]}</span></td><td>{g.services.map((s) => PRODUCT_NAMES[s.service_type] ?? s.service_type).join(", ") || "No services"}</td><td>{g.desired_state}</td><td>{g.reservation_state || "Unreserved"}</td><td>{measurement(g.metrics?.cpu_percent, "%")}</td><td>{measurement(g.metrics?.memory.used_percent, "%")}</td>
+          </tr>)}</tbody></table></div>
+          {(back.length > 0 || snapshot.next_after_id) && <div className="compute-pagination"><button type="button" className="button button--secondary" disabled={!back.length || loading} onClick={() => { navigate(back.at(-1)); setBack((v) => v.slice(0, -1)); }}>Previous</button><span>Page {back.length + 1}</span><button type="button" className="button button--secondary" disabled={!snapshot.next_after_id || loading} onClick={() => { setBack((v) => [...v, cursor]); navigate(snapshot.next_after_id!); }}>Next</button></div>}
         </section>
-      </div>
-    );
-  }
-
-  const { capacity, scheduler } = snapshot;
-  const activeSlots = Math.max(0, capacity.healthy_slots - capacity.free_slots);
-  const utilization = capacity.healthy_slots > 0
-    ? Math.min(100, Math.round((activeSlots / capacity.healthy_slots) * 100))
-    : 0;
-  const operational = capacity.available && capacity.healthy_slots > 0;
-  const configuredCapacity = scheduler.source === "configured";
-  const state = !operational
-    ? "Unavailable"
-    : configuredCapacity
-      ? "Configured capacity"
-      : capacity.free_slots === 0
-        ? "At capacity"
-        : "Operational";
-  const stateTone = !operational
-    ? "is-offline"
-    : configuredCapacity || capacity.free_slots === 0
-      ? "is-warning"
-      : "is-online";
-
-  return (
-    <div className="gpu-health-page">
-      <section className="gpu-health-hero">
-        <div className="gpu-health-heading">
-          <span className="eyebrow-badge">Infrastructure overview</span>
-          <h1>GPU health</h1>
-          <p>Live capacity and scheduler readiness for video generation workloads.</p>
-        </div>
-        <div className="gpu-health-actions">
-          <div aria-live="polite" className={`gpu-live-status ${stateTone}`}>
-            <span className="gpu-live-dot" />
-            <span>
-              <strong>{state}</strong>
-              <small>Updated {formatTimestamp(capacity.observed_at)}</small>
-            </span>
-          </div>
-          <button className="button button--secondary" disabled={refreshing} onClick={() => void refresh()} type="button">
-            <RefreshIcon className={refreshing ? "spin" : undefined} />
-            {refreshing ? "Refreshing…" : "Refresh"}
-          </button>
-        </div>
-      </section>
-
-      {error ? (
-        <div className="gpu-inline-alert" role="alert">
-          <AlertIcon />
-          <span><strong>Refresh failed.</strong> Showing the last available snapshot. {error}</span>
-        </div>
-      ) : null}
-
-      <section aria-label="GPU capacity metrics" className="gpu-metric-grid">
-        <article className="gpu-metric-card">
-          <span className="gpu-metric-label">Healthy slots</span>
-          <strong>{capacity.healthy_slots.toLocaleString()}</strong>
-          <small>Ready to accept or process work</small>
-        </article>
-        <article className="gpu-metric-card is-active">
-          <span className="gpu-metric-label">Active slots</span>
-          <strong>{activeSlots.toLocaleString()}</strong>
-          <small>Healthy slots currently occupied</small>
-        </article>
-        <article className="gpu-metric-card is-free">
-          <span className="gpu-metric-label">Free slots</span>
-          <strong>{capacity.free_slots.toLocaleString()}</strong>
-          <small>Immediately available capacity</small>
-        </article>
-        <article className="gpu-metric-card is-queue">
-          <span className="gpu-metric-label">Queue depth</span>
-          <strong>{capacity.queue_depth === null ? "—" : capacity.queue_depth.toLocaleString()}</strong>
-          <small>{capacity.queue_depth === null ? "Not reported by scheduler" : "Jobs waiting for capacity"}</small>
-        </article>
-      </section>
-
-      <section className="gpu-panel-grid">
-        <article className="gpu-panel gpu-capacity-panel">
-          <header className="gpu-panel-header">
-            <span className="gpu-panel-icon"><GpuIcon /></span>
-            <div>
-              <p className="section-kicker">Pool utilization</p>
-              <h2>Healthy GPU capacity</h2>
-            </div>
-            <strong className="gpu-utilization-value">{utilization}%</strong>
-          </header>
-          <div
-            aria-label={`${utilization}% of healthy GPU slots are active`}
-            aria-valuemax={100}
-            aria-valuemin={0}
-            aria-valuenow={utilization}
-            className="gpu-capacity-track"
-            role="progressbar"
-          >
-            <span style={{ width: `${utilization}%` }} />
-          </div>
-          <div className="gpu-capacity-legend">
-            <span><i className="is-active" />Active <strong>{activeSlots}</strong></span>
-            <span><i className="is-free" />Free <strong>{capacity.free_slots}</strong></span>
-          </div>
-          <div className="gpu-availability-row">
-            <span className={`gpu-availability-icon ${operational ? "is-online" : "is-offline"}`}>
-              {operational ? <CheckIcon /> : <AlertIcon />}
-            </span>
-            <span>
-              <strong>
-                {!operational
-                  ? "GPU pool is unavailable"
-                  : configuredCapacity
-                    ? "Configured capacity only"
-                    : "GPU pool is available"}
-              </strong>
-              <small>
-                {!operational
-                  ? "No healthy GPU capacity is currently being reported."
-                  : configuredCapacity
-                    ? "The scheduler proxy is not configured, so live free-slot health is unavailable."
-                    : `${capacity.free_slots} of ${capacity.healthy_slots} healthy slots can accept work now.`}
-              </small>
-            </span>
-          </div>
-        </article>
-
-        <article className="gpu-panel">
-          <header className="gpu-panel-header">
-            <div>
-              <p className="section-kicker">Control plane</p>
-              <h2>Scheduler configuration</h2>
-            </div>
-          </header>
-          <dl className="gpu-detail-list">
-            <div><dt>Mode</dt><dd><span className="gpu-code-badge">{scheduler.mode}</span></dd></div>
-            <div><dt>Video job API</dt><dd><FeatureStatus enabled={scheduler.api_enabled} /></dd></div>
-            <div><dt>Worker lease API</dt><dd><FeatureStatus enabled={scheduler.worker_lease_api_enabled} /></dd></div>
-            <div><dt>Policy version</dt><dd><code>{scheduler.policy_version}</code></dd></div>
-            <div><dt>Capacity source</dt><dd><code>{scheduler.source || "Not reported"}</code></dd></div>
-            <div><dt>Observed at</dt><dd>{formatTimestamp(capacity.observed_at)}</dd></div>
-          </dl>
-        </article>
-      </section>
-
-      <p className="gpu-refresh-note">This screen refreshes automatically every 15 seconds.</p>
-    </div>
-  );
+        {selected && <section aria-label={`${selected.name} resources`} className="monitor-detail">
+          <div className="compute-section-heading"><div><h2>{selected.name}</h2><p>Collector {selected.server_id} · Sampled {time(selected.sampled_at)}</p></div><Link href={`/gpus/${selected.gpu_id}`} className="button button--secondary">GPU configuration</Link></div>
+          {selected.health !== "healthy" && <p className="compute-notice">{selected.health === "identity_mismatch" ? "Collector server ID or hardware UUID does not match this GPU. Verify the registration before trusting its measurements." : selected.health === "unavailable" ? "The collector could not be read. Check its address, credentials and availability." : selected.health === "stale" ? "These are old readings. The collector is not providing fresh samples." : "Some resource measurements are unavailable. Missing values are shown as —."}</p>}
+          {!selected.hardware_uuid && <p className="compute-footer-note">Hardware identity is not configured. Device readings below cover all GPUs reported by this server’s collector.</p>}
+          {metrics && <><div className="gpu-metric-grid"><Metric label="CPU utilization" value={measurement(metrics.cpu_percent, "%")} /><Metric label="RAM usage" value={measurement(metrics.memory.used_percent, "%")} detail={`${bytes(metrics.memory.used_bytes)} / ${bytes(metrics.memory.total_bytes)}`} /><Metric label="Network receive" value={bytes(metrics.network.bytes_received_per_second) + "/s"} /><Metric label="Network send" value={bytes(metrics.network.bytes_sent_per_second) + "/s"} /></div>
+            <div className="monitor-device-grid">{metrics.devices.map((d) => <article className="gpu-panel" key={d.hardware_uuid}><h3>{d.name}</h3><p className="monitor-uuid">{d.hardware_uuid}</p><dl className="gpu-detail-list"><div><dt>GPU utilization</dt><dd>{measurement(d.utilization_percent, "%")}</dd></div><div><dt>VRAM</dt><dd>{measurement(d.memory_used_mib, " MiB")} / {measurement(d.memory_total_mib, " MiB")}</dd></div><div><dt>Temperature</dt><dd>{measurement(d.temperature_celsius, " °C")}</dd></div><div><dt>Power</dt><dd>{measurement(d.power_watts, " W")}</dd></div></dl></article>)}</div>
+            {!metrics.devices.length && <p className="compute-notice">GPU device telemetry is unavailable. System resource measurements are shown where available.</p>}
+            <div className="gpu-panel"><h3>System resources</h3><dl className="gpu-detail-list"><div><dt>Uptime</dt><dd>{measurement(metrics.uptime_seconds == null ? null : metrics.uptime_seconds / 3600, " hours")}</dd></div><div><dt>Swap</dt><dd>{bytes(metrics.swap.used_bytes)} / {bytes(metrics.swap.total_bytes)}</dd></div>{metrics.disks.map((disk) => <div key={disk.path}><dt>Disk {disk.path}</dt><dd>{measurement(disk.used_percent, "%")} · {bytes(disk.used_bytes)} / {bytes(disk.total_bytes)}</dd></div>)}</dl></div>
+          </>}
+          <div className="compute-tags">{selected.services.map((s) => <span key={s.service_id}>{PRODUCT_NAMES[s.service_type] ?? s.service_type} · {s.desired_state}</span>)}</div>
+          <History key={`${selected.gpu_id}:${selected.revision}`} gpu={selected} />
+        </section>}
+      </>}
+      <p className="gpu-refresh-note">Live readings refresh every 15 seconds while this tab is visible. Collector health describes resource telemetry; model readiness is checked separately when scheduling jobs.</p>
+    </>}
+  </div>;
 }
