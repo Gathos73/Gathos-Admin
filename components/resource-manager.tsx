@@ -22,7 +22,7 @@ import {
 } from "../lib/catalog-inline-drafts";
 
 import { getResourceConfig } from "../lib/resources";
-import type { JsonObject, ResourceKey, ResourceRecord } from "../lib/types";
+import type { JsonObject, ResourceKey, ResourceListResponse, ResourceRecord } from "../lib/types";
 import { ConfirmDialog } from "./confirm-dialog";
 import { DataTable } from "./data-table";
 import {
@@ -125,7 +125,7 @@ function SecretDialog({ secret, copied, onCopy, onClose }: SecretDialogProps) {
   );
 }
 
-export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
+export function ResourceManager({ resourceKey, initialData }: { resourceKey: ResourceKey; initialData?: ResourceListResponse | null }) {
   const config = getResourceConfig(resourceKey);
   const router = useRouter();
   const pathname = usePathname();
@@ -174,7 +174,12 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
     search,
     searchField,
   });
-  const [loadState, setLoadState] = useState<ResourceLoadState>({
+  const [loadState, setLoadState] = useState<ResourceLoadState>(initialData ? {
+    error: null,
+    requestKey,
+    rows: initialData.rows,
+    total: initialData.pagination.total,
+  } : {
     error: null,
     requestKey: "",
     rows: [],
@@ -198,7 +203,7 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
   const [productCatalog, setProductCatalog] = useState<{ id: string; code: string; name: string }[]>([]);
 
   useEffect(() => {
-    if (resourceKey !== "plans") return;
+    if (resourceKey !== "plans" || drawer.mode === "closed" || productCatalog.length) return;
     let active = true;
     listResource("products", { page: 1, pageSize: 200, orderBy: "code", descending: false })
       .then((res) => {
@@ -230,7 +235,7 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
     return () => {
       active = false;
     };
-  }, [resourceKey]);
+  }, [drawer.mode, productCatalog.length, resourceKey]);
 
   const [submitting, setSubmitting] = useState(false);
   const [pendingPlan, setPendingPlan] = useState<JsonObject | null>(null);
@@ -263,6 +268,7 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
   );
 
   useEffect(() => {
+    if (loadState.requestKey === requestKey) return;
     const controller = new AbortController();
     let active = true;
     listResource(
@@ -302,7 +308,7 @@ export function ResourceManager({ resourceKey }: { resourceKey: ResourceKey }) {
       active = false;
       controller.abort();
     };
-  }, [descending, filterBy, filterValue, hasFilterValue, orderBy, page, pageSize, requestKey, resourceKey, search, searchField]);
+  }, [descending, filterBy, filterValue, hasFilterValue, loadState.requestKey, orderBy, page, pageSize, requestKey, resourceKey, search, searchField]);
 
   const refresh = () => { clearRequestCache(); setRefreshVersion((version) => version + 1); };
 

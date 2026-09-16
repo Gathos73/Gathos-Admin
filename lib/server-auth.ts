@@ -5,6 +5,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { verifySession } from "@/lib/session-token";
+import type { ResourceKey, ResourceListResponse, ResourceQuery } from "@/lib/types";
 
 type AdminCheckPayload = {
   authenticated?: boolean;
@@ -24,6 +25,34 @@ export function getBackendUrl(): string {
 
 export async function getForwardedCookieHeader(): Promise<string> {
   return (await cookies()).toString();
+}
+
+export async function getServerResourceList(
+  resource: ResourceKey,
+  query: ResourceQuery,
+): Promise<ResourceListResponse | null> {
+  const token = (await cookies()).get("gathos_session")?.value;
+  if (!token) return null;
+  const parameters = new URLSearchParams({
+    page: String(query.page),
+    page_size: String(query.pageSize),
+    order_by: query.orderBy,
+    descending: String(query.descending),
+  });
+  try {
+    const response = await fetch(
+      `${getBackendUrl()}/api/admin/resources/${resource}?${parameters.toString()}`,
+      {
+        cache: "no-store",
+        headers: { cookie: `gathos_session=${encodeURIComponent(token)}` },
+        signal: AbortSignal.timeout(5_000),
+      },
+    );
+    if (!response.ok) return null;
+    return await response.json() as ResourceListResponse;
+  } catch {
+    return null;
+  }
 }
 
 export const getAdminAccess = cache(async (): Promise<AdminAccess> => {

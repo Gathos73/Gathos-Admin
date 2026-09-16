@@ -8,9 +8,11 @@ import {
   resourceKeyFromSlug,
   RESOURCE_ROUTE_SLUGS,
 } from "../../../lib/resources";
+import { getServerResourceList } from "../../../lib/server-auth";
 
 interface ResourcePageProps {
   params: Promise<{ resource: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export function generateStaticParams() {
@@ -37,14 +39,23 @@ function ResourceFallback() {
   );
 }
 
-export default async function ResourcePage({ params }: ResourcePageProps) {
-  const { resource } = await params;
+export default async function ResourcePage({ params, searchParams }: ResourcePageProps) {
+  const [{ resource }, parameters] = await Promise.all([params, searchParams]);
   const resourceKey = resourceKeyFromSlug(resource);
   if (!resourceKey) notFound();
+  const config = getResourceConfig(resourceKey);
+  const initialData = Object.keys(parameters).length === 0
+    ? await getServerResourceList(resourceKey, {
+        page: 1,
+        pageSize: 50,
+        orderBy: config.defaultOrder,
+        descending: config.defaultDescending,
+      })
+    : null;
 
   return (
     <Suspense fallback={<ResourceFallback />}>
-      <ResourceManager resourceKey={resourceKey} />
+      <ResourceManager initialData={initialData} resourceKey={resourceKey} />
     </Suspense>
   );
 }
