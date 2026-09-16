@@ -3,7 +3,6 @@ import { CATALOG_CONFIGS } from "./catalog-resources";
 import { SUBSCRIPTION_CONFIG } from "./subscription-resource";
 import type {
   ResourceConfig,
-  ResourceField,
   ResourceKey,
   SelectOption,
 } from "./types";
@@ -25,44 +24,6 @@ const GENERATION_TYPE_OPTIONS: SelectOption[] = [
           { label: "Image to image", value: "image2image" },
 ];
 
-const USER_QUOTA_FIELDS: ResourceField[] = [
-  {
-    name: "window_limit",
-    label: "Combined UTC-window limit",
-    kind: "number",
-    nullable: true,
-    min: 0,
-  },
-  {
-    name: "max_concurrent",
-    label: "Maximum concurrent jobs",
-    kind: "number",
-    nullable: true,
-    min: 1,
-  },
-  {
-    name: "image_window_limit",
-    label: "Image UTC-window limit",
-    kind: "number",
-    nullable: true,
-    min: 0,
-  },
-  {
-    name: "tts_window_limit",
-    label: "TTS UTC-window limit",
-    kind: "number",
-    nullable: true,
-    min: 0,
-  },
-  {
-    name: "video_window_limit",
-    label: "Video UTC-window limit",
-    kind: "number",
-    nullable: true,
-    min: 0,
-  },
-];
-
 export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
   ...CATALOG_CONFIGS,
   ...DEBUGGING_CONFIGS,
@@ -71,7 +32,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
     key: "users",
     label: "Users",
     labelSingular: "user",
-    description: "Accounts, plans, access state, and quota overrides.",
+    description: "Accounts, assigned plans, and administrator access.",
     primaryKey: "id",
     defaultOrder: "created_at",
     defaultDescending: true,
@@ -79,6 +40,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
       { name: "email", label: "Email", sortable: true },
       { name: "name", label: "Name", sortable: true },
       { name: "plan", label: "Plan", kind: "status", sortable: true },
+      { name: "is_superuser", label: "Superuser", kind: "boolean", sortable: true },
       { name: "is_suspended", label: "Suspended", kind: "boolean", sortable: true },
       { name: "is_comped", label: "Comped", kind: "boolean", sortable: true },
       { name: "created_at", label: "Created", kind: "date", sortable: true },
@@ -96,16 +58,11 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
         defaultValue: "free",
       },
       {
-        name: "tier_override",
-        label: "Tier override",
-        kind: "select",
-        nullable: true,
-        options: [
-          { label: "Admin", value: "admin" },
-          { label: "Pro", value: "pro" },
-          { label: "Trial", value: "trial" },
-          { label: "Miscellaneous", value: "misc" },
-        ],
+        name: "is_superuser",
+        label: "Superuser",
+        kind: "boolean",
+        defaultValue: false,
+        help: "Allows this active user to sign in to administration and manage the system.",
       },
       {
         name: "is_comped",
@@ -126,7 +83,6 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
         kind: "text",
         nullable: true,
       },
-      ...USER_QUOTA_FIELDS,
     ],
     searchFields: [
       { label: "Email", value: "email" },

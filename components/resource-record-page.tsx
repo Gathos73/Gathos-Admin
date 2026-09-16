@@ -82,6 +82,17 @@ function primaryRecordFields(resourceKey: ResourceKey, record: ResourceRecord): 
     delete fields.plan_products;
   } else if (resourceKey === "products") {
     delete fields.product_routes;
+  } else if (resourceKey === "users") {
+    for (const field of [
+      "window_limit",
+      "max_concurrent",
+      "image_window_limit",
+      "tts_window_limit",
+      "video_window_limit",
+      "tier_override",
+    ]) {
+      delete fields[field];
+    }
   }
   return fields;
 }
