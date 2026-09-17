@@ -65,16 +65,18 @@ BACKEND_URL=https://backend.gathos.com
 
 The protected route-group layout rejects missing sessions locally. When server-only
 `SESSION_SECRET` matches FastAPI, it also verifies signatures and expiry locally.
-Valid sessions still forward the session cookie to
-`GET /api/admin/check`. Access fails closed unless FastAPI returns `isAdmin: true`; there is no
-frontend or development bypass.
+New sessions carry the administrator claim established at login, so the layout does not make a
+second `GET /api/admin/check` request. Sessions issued before this claim was introduced use that
+endpoint once as a compatibility fallback. Every admin data API still checks current user status
+and `is_superuser` in FastAPI, so demotion or suspension takes effect on protected operations;
+there is no frontend or development bypass.
 
 The Admin login is separate from the landing and dashboard login screens. It offers email and
 password only and submits to FastAPI's dedicated `POST /api/admin/login` through the same-origin
 BFF. FastAPI verifies the password, current account state, and admin role before issuing a
-time-limited `gathos_session` cookie. The browser then navigates directly to the requested Admin page, where the layout
-checks current permission. Login no longer makes a duplicate browser-side check.
-Admin permissions are never cached.
+time-limited `gathos_session` cookie. The browser then navigates directly to the requested Admin
+page, where the layout verifies the signed claim without another database round trip. Login no
+longer makes a duplicate browser-side check.
 
 Browser-side requests use the same-origin endpoint:
 

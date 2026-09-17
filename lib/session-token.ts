@@ -1,6 +1,12 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-export type SessionIdentity = { userId: string; email: string; iat: number; exp: number };
+export type SessionIdentity = {
+  userId: string;
+  email: string;
+  iat: number;
+  exp: number;
+  is_superuser?: boolean;
+};
 
 // Called only by server-only modules. Matches FastAPI's signed JSON envelope.
 export function verifySession(token: string, secret: string, now = Date.now() / 1000): SessionIdentity | null {

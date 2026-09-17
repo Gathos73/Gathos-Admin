@@ -173,7 +173,7 @@ export function computeError(error: unknown): string {
   return ({
     gpu_revision_changed: "This GPU was changed by another administrator. Reload the saved record before editing again.",
     pool_model_mismatch: "This execution pool already uses a different model or revision. Use the matching model or choose a new pool.",
-    compute_endpoint_host_not_allowed: "The backend has not approved this endpoint host. Add the GPU host or IP range to its registry allowlist.",
+    compute_endpoint_host_not_allowed: "This endpoint is outside the backend’s optional COMPUTE_ALLOWED_NETWORKS restriction.",
     compute_encryption_not_configured: "The backend registry encryption key must be configured before saving credentials.",
     credential_not_found: "A saved credential could not be found. Check its ID or enter new credentials.",
     gpu_identity_conflict: "A GPU with this hardware identity is already registered.",

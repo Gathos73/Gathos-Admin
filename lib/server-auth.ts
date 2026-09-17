@@ -58,11 +58,20 @@ export async function getServerResourceList(
 export const getAdminAccess = cache(async (): Promise<AdminAccess> => {
   const token = (await cookies()).get("gathos_session")?.value;
   if (!token) return { status: "unauthenticated" };
-  if (process.env.SESSION_SECRET && !verifySession(token, process.env.SESSION_SECRET)) {
-    return { status: "unauthenticated" };
+  const secret = process.env.SESSION_SECRET;
+  const identity = secret ? verifySession(token, secret) : null;
+  if (secret && !identity) return { status: "unauthenticated" };
+  if (identity?.is_superuser === true) {
+    return { status: "authorized", email: identity.email };
+  }
+  if (identity?.is_superuser === false) {
+    return { status: "forbidden", email: identity.email };
   }
   const cookieHeader = `gathos_session=${encodeURIComponent(token)}`;
 
+  // Sessions issued before the is_superuser claim was introduced get one
+  // compatibility check. New sessions never add a separate layout request;
+  // every admin data API still verifies current database authorization.
   try {
     const response = await fetch(`${getBackendUrl()}/api/admin/check`, {
       cache: "no-store",
