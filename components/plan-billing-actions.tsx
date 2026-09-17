@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { invitePlanUser, listResource, retryPlanBilling } from "@/lib/api";
+import { useSearchParams } from "next/navigation";
+import { getResourceRecord, invitePlanUser, listResource, retryPlanBilling } from "@/lib/api";
 import type { ResourceRecord } from "@/lib/types";
 import { useDialogFocus } from "./use-dialog-focus";
 
 export function PlanBillingActions({ plan, onChanged, onRefresh }: { plan: ResourceRecord; onChanged: (message: string) => void; onRefresh: () => void }) {
+  const searchParams = useSearchParams();
+  const suggestedUserId = searchParams.get("invite_user");
+  const [suggestedUser, setSuggestedUser] = useState<ResourceRecord | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<ResourceRecord[]>([]);
@@ -18,6 +22,17 @@ export function PlanBillingActions({ plan, onChanged, onRefresh }: { plan: Resou
   const status = String(plan.billing_sync_status || "not_requested");
   const canInvite = !plan.retired_at && Number(plan.price_minor) > 0 && plan.billing_provider === "dodo" && Boolean(plan.provider_price_id)
     && !["pending", "syncing", "failed", "uncertain"].includes(status);
+
+  useEffect(() => {
+    if (!suggestedUserId) return;
+    const controller = new AbortController();
+    void getResourceRecord("users", suggestedUserId, controller.signal)
+      .then(({ row }) => { if (!controller.signal.aborted) setSuggestedUser(row); })
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Could not load the selected user.");
+      });
+    return () => controller.abort();
+  }, [suggestedUserId]);
 
   useEffect(() => {
     if (!["pending", "syncing"].includes(status)) return;
@@ -60,11 +75,13 @@ export function PlanBillingActions({ plan, onChanged, onRefresh }: { plan: Resou
     <div><span>Dodo billing</span><strong>{plan.provider_price_id ? `Linked: ${String(plan.provider_price_id)}` : status.replaceAll("_", " ")}</strong>
       {plan.billing_sync_error ? <p role="alert">{String(plan.billing_sync_error)}</p> : null}
       {status === "not_requested" && !plan.provider_price_id ? <p>Link a Dodo product before inviting a user.</p> : null}
+      {suggestedUser && String(suggestedUser.id) === suggestedUserId ? <p>Created for {String(suggestedUser.email)}. Invite this user when billing is ready.</p> : null}
     </div>
     <div className="dialog-actions">
       {["failed", "uncertain", "pending"].includes(status) && !plan.retired_at ? <button className="button button--secondary" type="button" disabled={busy} onClick={() => void retry()}>Retry billing sync</button> : null}
       <button className="button button--primary" type="button" disabled={!canInvite || busy} onClick={() => {
-        requestId.current = crypto.randomUUID(); setUserId(""); setQuery(""); setError(""); setOpen(true);
+        const selected = suggestedUser && String(suggestedUser.id) === suggestedUserId ? suggestedUser : null;
+        requestId.current = crypto.randomUUID(); setUserId(selected ? String(selected.id) : ""); setQuery(selected ? String(selected.email) : ""); setError(""); setOpen(true);
       }}>Invite user</button>
     </div>
     {error && !open ? <p role="alert">{error}</p> : null}
@@ -74,6 +91,7 @@ export function PlanBillingActions({ plan, onChanged, onRefresh }: { plan: Resou
       <label className="form-field">Search by email<input type="search" value={query} disabled={busy} onChange={(event) => { setQuery(event.target.value); setUserId(""); requestId.current = crypto.randomUUID(); }} /></label>
       <label className="form-field">User<select value={userId} disabled={busy || loading} onChange={(event) => { setUserId(event.target.value); requestId.current = crypto.randomUUID(); }}>
         <option value="">{loading ? "Loading…" : "Choose a user"}</option>
+        {suggestedUser && String(suggestedUser.id) === userId && !users.some((user) => String(user.id) === userId) ? <option value={userId}>{String(suggestedUser.email)}</option> : null}
         {users.map((user) => <option key={String(user.id)} value={String(user.id)}>{String(user.email)}{user.name ? ` — ${String(user.name)}` : ""}</option>)}
       </select></label>
       <p>Showing up to 50 matches. Search to find another user.</p>
