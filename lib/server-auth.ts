@@ -5,7 +5,12 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { verifySession } from "@/lib/session-token";
-import type { ResourceKey, ResourceListResponse, ResourceQuery } from "@/lib/types";
+import type {
+  ResourceKey,
+  ResourceListResponse,
+  ResourceQuery,
+  ResourceRecordResponse,
+} from "@/lib/types";
 
 type AdminCheckPayload = {
   authenticated?: boolean;
@@ -51,6 +56,30 @@ export async function getServerResourceList(
     if (!response.ok) return null;
     return await response.json() as ResourceListResponse;
   } catch {
+    return null;
+  }
+}
+
+export async function getServerResourceRecord(
+  resource: ResourceKey,
+  recordId: string,
+): Promise<ResourceRecordResponse | null> {
+  const token = (await cookies()).get("gathos_session")?.value;
+  if (!token) return null;
+  try {
+    const response = await fetch(
+      `${getBackendUrl()}/api/admin/resources/${resource}/${encodeURIComponent(recordId)}`,
+      {
+        cache: "no-store",
+        headers: { cookie: `gathos_session=${encodeURIComponent(token)}` },
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
+    if (!response.ok) return null;
+    return await response.json() as ResourceRecordResponse;
+  } catch {
+    // Keep the existing browser fetch/error flow as a fallback if this
+    // server-to-backend prefetch is temporarily unavailable.
     return null;
   }
 }

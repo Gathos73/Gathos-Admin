@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { ResourceRecordPage } from "@/components/resource-record-page";
 import { getResourceConfig, resourceKeyFromSlug } from "@/lib/resources";
+import { getServerResourceRecord } from "@/lib/server-auth";
 
 interface RecordPageProps {
   params: Promise<{ recordId: string; resource: string }>;
@@ -20,9 +21,11 @@ export default async function RecordPage({ params }: RecordPageProps) {
   const { recordId, resource } = await params;
   const resourceKey = resourceKeyFromSlug(resource);
   if (!resourceKey) notFound();
+  const initialResponse = await getServerResourceRecord(resourceKey, recordId);
 
   return (
     <ResourceRecordPage
+      initialRecord={initialResponse?.row ?? null}
       mode="view"
       recordId={recordId}
       resourceKey={resourceKey}

@@ -98,11 +98,13 @@ function primaryRecordFields(resourceKey: ResourceKey, record: ResourceRecord): 
 }
 
 export function ResourceRecordPage({
+  initialRecord,
   mode,
   recordId,
   resourceKey,
   resourceSlug,
 }: {
+  initialRecord?: ResourceRecord | null;
   mode: RecordPageMode;
   recordId: string;
   resourceKey: ResourceKey;
@@ -115,8 +117,8 @@ export function ResourceRecordPage({
   const requestKey = `${resourceKey}:${recordId}:${refreshVersion}`;
   const [loadState, setLoadState] = useState<RecordLoadState>({
     error: null,
-    record: null,
-    requestKey: "",
+    record: initialRecord ?? null,
+    requestKey: initialRecord ? `${resourceKey}:${recordId}:0` : "",
   });
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -145,7 +147,12 @@ export function ResourceRecordPage({
     const controller = new AbortController();
     let active = true;
 
-    getResourceRecord(resourceKey, recordId, controller.signal)
+    const initialResponse =
+      refreshVersion === 0 && initialRecord
+        ? Promise.resolve({ table: resourceKey, row: initialRecord })
+        : getResourceRecord(resourceKey, recordId, controller.signal);
+
+    initialResponse
       .then((response) => {
         if (!active) return;
         const row = response.row;
@@ -211,7 +218,7 @@ export function ResourceRecordPage({
       active = false;
       controller.abort();
     };
-  }, [recordId, requestKey, resourceKey]);
+  }, [initialRecord, recordId, refreshVersion, requestKey, resourceKey]);
 
   const handleFieldValueChange = (name: string, value: unknown) => {
     if (resourceKey !== "plans" || name !== "product_ids") return;
