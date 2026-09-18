@@ -87,6 +87,10 @@ function primaryRecordFields(resourceKey: ResourceKey, record: ResourceRecord): 
     // Shown in the user section below the form.
     delete fields.user;
     delete fields.user_id;
+    // The product is shown once as its name; ids and the compat list are noise.
+    delete fields.product_id;
+    delete fields.product_code;
+    delete fields.product_codes;
   } else if (resourceKey === "users") {
     for (const field of [
       "window_limit",

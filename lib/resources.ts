@@ -138,7 +138,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
     key: "api_keys",
     label: "API keys",
     labelSingular: "API key",
-    description: "Issue, scope, rename, revoke, and audit API credentials.",
+    description: "Issue, rename, revoke, and audit API credentials. Each key is bound to one product.",
     primaryKey: "id",
     defaultOrder: "created_at",
     defaultDescending: true,
@@ -176,12 +176,12 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
         required: true,
         immutableOnEdit: true,
         options: [
-          { label: "Image generation", value: "image_gen" },
+          { label: "Image generation", value: "image" },
           { label: "Text to speech", value: "tts" },
           { label: "Video", value: "video" },
           { label: "Image to image", value: "image2image" },
         ],
-        defaultValue: "image_gen",
+        defaultValue: "image",
       },
       {
         name: "is_active",
@@ -201,7 +201,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
         name: "type",
         label: "Type",
         options: [
-          { label: "Image generation", value: "image_gen" },
+          { label: "Image generation", value: "image" },
           { label: "Text to speech", value: "tts" },
           { label: "Video", value: "video" },
           { label: "Image to image", value: "image2image" },
