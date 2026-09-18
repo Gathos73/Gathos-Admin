@@ -388,7 +388,15 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
     const id = String(record[config.primaryKey] ?? "");
     if (!id) return;
     const recordPath = `${pathname}/${encodeURIComponent(id)}`;
-    router.push(mode === "edit" ? `${recordPath}/edit` : recordPath);
+    const destination = mode === "edit" ? `${recordPath}/edit` : recordPath;
+    router.push(destination);
+  };
+
+  const prefetchRecord = (record: ResourceRecord, mode: "view" | "edit") => {
+    const id = String(record[config.primaryKey] ?? "");
+    if (!id) return;
+    const recordPath = `${pathname}/${encodeURIComponent(id)}`;
+    router.prefetch(mode === "edit" ? `${recordPath}/edit` : recordPath);
   };
 
   const submitRecord = async (payload: JsonObject) => {
@@ -641,9 +649,13 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
           loading={loading}
           onDelete={requestRowDelete}
           onEdit={(record) => openRecord(record, "edit")}
+          onEditIntent={(record) => prefetchRecord(record, "edit")}
           onSelectionChange={setSelectedIds}
           onSort={sort}
           onView={(record) => openRecord(record, "view")}
+          onViewIntent={(record) => prefetchRecord(record, "view")}
+          viewHref={(record) => `${pathname}/${encodeURIComponent(String(record[config.primaryKey] ?? ""))}`}
+          editHref={(record) => `${pathname}/${encodeURIComponent(String(record[config.primaryKey] ?? ""))}/edit`}
           orderBy={orderBy}
           primaryKey={config.primaryKey}
           rows={rows}

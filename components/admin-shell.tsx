@@ -29,6 +29,7 @@ import {
 } from "@/components/icons";
 
 import { RESOURCE_GROUPS } from "@/lib/resource-groups";
+import { RouteNavigationFeedback } from "@/components/route-navigation-feedback";
 
 type NavItem = {
   description: string;
@@ -177,6 +178,7 @@ export function AdminShell({ children, email }: { children: ReactNode; email?: s
   function openMatch(item: NavItem) {
     setQuery("");
     setMenuOpen(false);
+    router.prefetch(item.href);
     router.push(item.href);
   }
 
@@ -200,7 +202,7 @@ export function AdminShell({ children, email }: { children: ReactNode; email?: s
   const identity = email || "Administrator";
 
   return (
-    <div className={`admin-layout${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}>
+    <RouteNavigationFeedback className={`admin-layout${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}>
       <a className="skip-link" href="#admin-main">
         Skip to main content
       </a>
@@ -389,6 +391,8 @@ export function AdminShell({ children, email }: { children: ReactNode; email?: s
                       return (
                         <button
                           className="search-result"
+                          data-navigation-href={item.href}
+                          data-navigation-label={item.label}
                           key={item.href}
                           onClick={() => openMatch(item)}
                           type="button"
@@ -416,6 +420,6 @@ export function AdminShell({ children, email }: { children: ReactNode; email?: s
           {children}
         </main>
       </div>
-    </div>
+    </RouteNavigationFeedback>
   );
 }

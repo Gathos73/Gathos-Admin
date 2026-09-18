@@ -144,7 +144,11 @@ interface DataTableProps {
   onSelectionChange: (ids: string[]) => void;
   onSort: (column: string) => void;
   onView: (row: ResourceRecord) => void;
+  onViewIntent: (row: ResourceRecord) => void;
+  viewHref: (row: ResourceRecord) => string;
   onEdit: (row: ResourceRecord) => void;
+  onEditIntent: (row: ResourceRecord) => void;
+  editHref: (row: ResourceRecord) => string;
   onDelete: (row: ResourceRecord) => void;
 }
 
@@ -162,7 +166,11 @@ export function DataTable({
   onSelectionChange,
   onSort,
   onView,
+  onViewIntent,
+  viewHref,
   onEdit,
+  onEditIntent,
+  editHref,
   onDelete,
 }: DataTableProps) {
   const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
@@ -276,7 +284,11 @@ export function DataTable({
                           <button
                             aria-label={`View ${id}`}
                             className="icon-button"
+                            data-navigation-href={viewHref(row)}
+                            data-navigation-label="View record"
                             onClick={() => onView(row)}
+                            onFocus={() => onViewIntent(row)}
+                            onPointerEnter={() => onViewIntent(row)}
                             title="View"
                             type="button"
                           >
@@ -286,7 +298,11 @@ export function DataTable({
                             <button
                               aria-label={`Edit ${id}`}
                               className="icon-button"
+                              data-navigation-href={editHref(row)}
+                              data-navigation-label="Edit record"
                               onClick={() => onEdit(row)}
+                              onFocus={() => onEditIntent(row)}
+                              onPointerEnter={() => onEditIntent(row)}
                               title="Edit"
                               type="button"
                             >
