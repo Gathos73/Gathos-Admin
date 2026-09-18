@@ -41,11 +41,18 @@ function fieldPayloadValue(
   value: FormValue,
 ): { value?: JsonValue; error?: string } {
   if (field.kind === "boolean") return { value: Boolean(value) };
-  const raw = String(value).trim();
+  const raw = field.kind === "password" ? String(value) : String(value).trim();
 
   if (!raw) {
     if (field.required) return { error: `${field.label} is required.` };
     return field.nullable ? { value: null } : {};
+  }
+
+  if (field.minLength !== undefined && raw.length < field.minLength) {
+    return { error: `${field.label} must be at least ${field.minLength} characters.` };
+  }
+  if (field.maxLength !== undefined && raw.length > field.maxLength) {
+    return { error: `${field.label} must be at most ${field.maxLength} characters.` };
   }
 
   if (field.kind === "number") {
@@ -126,6 +133,13 @@ export function RecordForm({
     for (const field of visibleFields) {
       if (mode === "edit" && field.immutableOnEdit) continue;
       const parsed = fieldPayloadValue(field, values[field.name] ?? "");
+      if (field.confirms) {
+        if (parsed.error) nextErrors[field.name] = parsed.error;
+        else if (values[field.name] !== values[field.confirms]) {
+          nextErrors[field.name] = "Passwords do not match.";
+        }
+        continue;
+      }
       if (parsed.error) nextErrors[field.name] = parsed.error;
       else if (parsed.value !== undefined) {
         if (mode === "edit") {
@@ -250,12 +264,15 @@ export function RecordForm({
                   />
                 ) : null}
 
-                {["text", "email", "number", "datetime"].includes(field.kind) ? (
+                {["text", "email", "password", "number", "datetime"].includes(field.kind) ? (
                   <input
+                    autoComplete={field.kind === "password" ? "new-password" : undefined}
                     aria-describedby={describedBy}
                     aria-invalid={Boolean(error)}
                     disabled={disabled}
                     min={field.min}
+                    minLength={field.minLength}
+                    maxLength={field.maxLength}
                     name={field.name}
                     onChange={(event) =>
                       updateValue(field.name, event.target.value)

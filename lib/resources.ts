@@ -47,6 +47,26 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
     ],
     fields: [
       { name: "email", label: "Email", kind: "email", required: true },
+      {
+        name: "password",
+        label: "Password",
+        kind: "password",
+        required: true,
+        createOnly: true,
+        minLength: 8,
+        maxLength: 1024,
+        help: "Use at least 8 characters. Share this password with the user so they can sign in. No email is sent automatically.",
+      },
+      {
+        name: "password_confirmation",
+        label: "Confirm password",
+        kind: "password",
+        required: true,
+        createOnly: true,
+        minLength: 8,
+        maxLength: 1024,
+        confirms: "password",
+      },
       { name: "name", label: "Name", kind: "text", nullable: true },
       { name: "avatar_url", label: "Avatar URL", kind: "text", nullable: true },
       {

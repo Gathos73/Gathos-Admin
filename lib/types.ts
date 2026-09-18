@@ -30,6 +30,7 @@ export type FieldKind =
   | "relations"
   | "text"
   | "email"
+  | "password"
   | "number"
   | "boolean"
   | "select"
@@ -54,6 +55,10 @@ export interface ResourceField {
   placeholder?: string;
   help?: string;
   min?: number;
+  minLength?: number;
+  maxLength?: number;
+  /** Confirm another field without including this value in the request. */
+  confirms?: string;
   step?: number;
   jsonObject?: boolean;
   defaultValue?: JsonPrimitive | JsonObject | JsonValue[];
