@@ -27,12 +27,13 @@ export type GpuWrite = {
 export type RegisteredService = ServiceWrite & { service_id: string; version: number };
 export type RegisteredGpu = Omit<GpuWrite, "services"> & {
   gpu_id: string; revision: number; etag: string; services: RegisteredService[];
+  credential_labels?: Record<string, string>;
   sharing_policy: "exclusive"; max_active_jobs: 1; created_at: string; updated_at: string;
   reservation: { reservation_id: string; state: string; expires_at: string } | null;
 };
 export type GpuList = { items: RegisteredGpu[]; next_cursor: string | null };
 export type CredentialWrite = { label: string; headers: { "X-API-Key"?: string; Authorization?: string } };
-export type CredentialDraft = { mode: "new" | "existing" | "none"; reference: string; apiKey: string; authorization: string };
+export type CredentialDraft = { mode: "new" | "existing" | "none"; reference: string; label?: string; apiKey: string; authorization: string };
 export type ServiceDraft = Omit<ServiceWrite, "credential_ref"> & { draftId: string; credential: CredentialDraft };
 export type GpuDraft = Omit<GpuWrite, "vram_mib" | "collector" | "services"> & {
   vram: string;
@@ -40,8 +41,8 @@ export type GpuDraft = Omit<GpuWrite, "vram_mib" | "collector" | "services"> & {
   services: ServiceDraft[];
 };
 
-export function credentialDraft(reference?: string | null, required = false): CredentialDraft {
-  return { mode: reference ? "existing" : required ? "new" : "none", reference: reference ?? "", apiKey: "", authorization: "" };
+export function credentialDraft(reference?: string | null, required = false, label?: string): CredentialDraft {
+  return { mode: reference ? "existing" : required ? "new" : "none", reference: reference ?? "", label, apiKey: "", authorization: "" };
 }
 
 export function newService(draftId: string, type: ServiceType = "image"): ServiceDraft {
@@ -58,10 +59,10 @@ export function gpuDraft(record?: RegisteredGpu): GpuDraft {
     gpu_model: record?.gpu_model ?? "", vram: record?.vram_mib?.toString() ?? "", desired_state: record?.desired_state ?? "enabled",
     collector: {
       base_url: record?.collector.base_url ?? "", server_id: record?.collector.server_id ?? "",
-      status_path: "/v1/status", metrics_path: "/metrics", credential: credentialDraft(record?.collector.credential_ref, true),
+      status_path: "/v1/status", metrics_path: "/metrics", credential: credentialDraft(record?.collector.credential_ref, true, record?.credential_labels?.[record.collector.credential_ref]),
     },
     services: record ? record.services.map((service) => ({
-      ...serviceWrite(service), draftId: service.service_id, credential: credentialDraft(service.credential_ref),
+      ...serviceWrite(service), draftId: service.service_id, credential: credentialDraft(service.credential_ref, false, record.credential_labels?.[service.credential_ref ?? ""]),
     })) : [newService("initial")],
   };
 }

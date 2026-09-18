@@ -78,12 +78,17 @@ export function ComputeRegistry() {
 function CredentialFields({ value, onChange, required = false }: { value: CredentialDraft; onChange: (next: CredentialDraft) => void; required?: boolean }) {
   return <div className="compute-credentials">
     <Field label="Authentication">
-      <select value={value.mode} onChange={(event) => onChange({ mode: event.target.value as CredentialDraft["mode"], reference: value.reference, apiKey: "", authorization: "" })}>
+      <select value={value.mode} onChange={(event) => onChange({ mode: event.target.value as CredentialDraft["mode"], reference: value.reference, label: value.label, apiKey: "", authorization: "" })}>
         {!required && <option value="none">No authentication</option>}
-        <option value="new">Enter credentials</option><option value="existing">Use saved credential ID</option>
+        <option value="new">Enter credentials</option><option value="existing">Use saved credential</option>
       </select>
     </Field>
-    {value.mode === "existing" && <Field label="Saved credential ID" help="Existing secrets are never displayed. Choose ‘Enter credentials’ to replace them."><input required value={value.reference} maxLength={36} placeholder="Credential UUID" onChange={(event) => onChange({ ...value, reference: event.target.value })} /></Field>}
+    {value.mode === "existing" && <Field label="Saved credential" help="Existing secrets are never displayed. Choose ‘Enter credentials’ to replace them.">
+      {value.label ? <>
+        <input readOnly value={value.label} />
+        <button type="button" className="button button--secondary" onClick={() => onChange({ ...value, reference: "", label: undefined })}>Use another saved credential</button>
+      </> : <input required value={value.reference} maxLength={36} placeholder="Credential UUID" onChange={(event) => onChange({ ...value, reference: event.target.value })} />}
+    </Field>}
     {value.mode === "new" && <div className="form-grid">
       <Field label="API key" help="Sent as X-API-Key."><input type="password" autoComplete="new-password" maxLength={4096} value={value.apiKey} onChange={(event) => onChange({ ...value, apiKey: event.target.value })} /></Field>
       <Field label="Authorization header" help="Optional alternative or additional header, including Bearer if required."><input type="password" autoComplete="new-password" maxLength={4096} value={value.authorization} onChange={(event) => onChange({ ...value, authorization: event.target.value })} /></Field>
