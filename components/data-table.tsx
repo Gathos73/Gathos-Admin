@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 
 import type { JsonValue, ResourceColumn, ResourceRecord } from "../lib/types";
-import { DeleteIcon, EditIcon, MoreIcon } from "./icons";
+import { DeleteIcon, EditIcon, ViewIcon } from "./icons";
 
 const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
@@ -292,7 +292,7 @@ export function DataTable({
                             title="View"
                             type="button"
                           >
-                            <MoreIcon size={17} />
+                            <ViewIcon size={17} />
                           </button>
                           {canEdit ? (
                             <button

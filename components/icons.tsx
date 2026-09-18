@@ -23,6 +23,7 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  SquareArrowOutUpRight,
   Trash2,
   TriangleAlert,
   Users,
@@ -68,5 +69,6 @@ export const RefreshIcon = createAdminIcon(RefreshCw);
 export const EditIcon = createAdminIcon(Pencil);
 export const DeleteIcon = createAdminIcon(Trash2);
 export const MoreIcon = createAdminIcon(Ellipsis);
+export const ViewIcon = createAdminIcon(SquareArrowOutUpRight);
 export const CheckIcon = createAdminIcon(Check);
 export const AlertIcon = createAdminIcon(TriangleAlert);

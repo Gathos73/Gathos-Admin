@@ -1,6 +1,8 @@
 "use client";
 
 import { type FormEvent, type ReactNode, useMemo, useState } from "react";
+import { readOnlyFields } from "../lib/readonly-fields";
+import { ReadOnlyItemList, selectedItemsFromRecord } from "./readonly-item-list";
 import { RelationField } from "./relation-field";
 
 import type {
@@ -85,14 +87,25 @@ function fieldPayloadValue(
   return { value: raw };
 }
 
+function readOnlyRelationLabel(field: ResourceField, record: ResourceRecord | undefined, value: string): string {
+  // Names for referenced rows ship with the record (e.g. product_id -> product_name).
+  const base = field.name.replace(/_id$/, "");
+  const name = record?.[`${base}_name`];
+  const code = record?.[`${base}_code`];
+  if (!name) return value;
+  return code ? `${String(name)} (${String(code)})` : String(name);
+}
+
 interface RecordFormProps {
   children?: ReactNode;
   config: ResourceConfig;
   mode: FormMode;
   initialRecord?: ResourceRecord;
-  submitting: boolean;
-  onSubmit: (payload: JsonObject) => Promise<void>;
-  onCancel: () => void;
+  /** Render every field locked, without action buttons or reference-option requests. */
+  readOnly?: boolean;
+  submitting?: boolean;
+  onSubmit?: (payload: JsonObject) => Promise<void>;
+  onCancel?: () => void;
   onFieldValueChange?: (name: string, value: FormValue) => void;
 }
 
@@ -101,17 +114,20 @@ export function RecordForm({
   config,
   mode,
   initialRecord,
-  submitting,
+  readOnly = false,
+  submitting = false,
   onSubmit,
   onCancel,
   onFieldValueChange,
 }: RecordFormProps) {
   const visibleFields = useMemo(
     () =>
-      config.fields.filter((field) =>
-        mode === "create" ? !field.editOnly : !field.createOnly,
-      ),
-    [config.fields, mode],
+      readOnly && initialRecord
+        ? readOnlyFields(config, initialRecord)
+        : config.fields.filter((field) =>
+            mode === "create" ? !field.editOnly : !field.createOnly,
+          ),
+    [config, initialRecord, mode, readOnly],
   );
   const [values, setValues] = useState<Record<string, FormValue>>(() =>
     Object.fromEntries(
@@ -127,6 +143,7 @@ export function RecordForm({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (readOnly || !onSubmit) return;
     const payload: JsonObject = {};
     const nextErrors: Record<string, string> = {};
 
@@ -179,19 +196,19 @@ export function RecordForm({
   };
 
   return (
-    <form className="record-form" noValidate onSubmit={handleSubmit}>
+    <form className={`record-form${readOnly ? " record-form--readonly" : ""}`} noValidate onSubmit={handleSubmit}>
       {errors.__form ? (
         <div className="form-error form-error--summary" role="alert">
           {errors.__form}
         </div>
       ) : null}
-      <fieldset disabled={submitting}>
+      <fieldset disabled={submitting || readOnly}>
         <div className="form-grid">
           {visibleFields.map((field) => {
             const error = errors[field.name];
             const errorId = `${field.name}-error`;
             const helpId = `${field.name}-help`;
-            const disabled = mode === "edit" && field.immutableOnEdit;
+            const disabled = readOnly || (mode === "edit" && field.immutableOnEdit);
             const describedBy = error ? errorId : field.help ? helpId : undefined;
 
             const FieldWrapper = field.kind === "relations" ? "div" : "label";
@@ -221,7 +238,20 @@ export function RecordForm({
                   </span>
                 )}
 
-                {field.kind === "relation" || field.kind === "relations" ? (
+                {readOnly && field.kind === "relations" ? (
+                  <ReadOnlyItemList items={selectedItemsFromRecord(initialRecord, String(values[field.name] ?? ""))} />
+                ) : null}
+
+                {readOnly && field.kind === "relation" ? (
+                  <input
+                    disabled
+                    name={field.name}
+                    readOnly
+                    value={readOnlyRelationLabel(field, initialRecord, String(values[field.name] ?? ""))}
+                  />
+                ) : null}
+
+                {!readOnly && (field.kind === "relation" || field.kind === "relations") ? (
                   <RelationField field={field} value={String(values[field.name] ?? "")} disabled={Boolean(disabled)}
                     onChange={(value) => updateValue(field.name, value)} />
                 ) : null}
@@ -301,14 +331,16 @@ export function RecordForm({
         </div>
       </fieldset>
       {children}
-      <div className="drawer-actions">
-        <button className="button button--secondary" disabled={submitting} onClick={onCancel} type="button">
-          Cancel
-        </button>
-        <button className="button button--primary" disabled={submitting} type="submit">
-          {submitting ? "Saving…" : mode === "create" ? `Create ${config.labelSingular}` : "Save changes"}
-        </button>
-      </div>
+      {readOnly ? null : (
+        <div className="drawer-actions">
+          <button className="button button--secondary" disabled={submitting} onClick={onCancel} type="button">
+            Cancel
+          </button>
+          <button className="button button--primary" disabled={submitting} type="submit">
+            {submitting ? "Saving…" : mode === "create" ? `Create ${config.labelSingular}` : "Save changes"}
+          </button>
+        </div>
+      )}
     </form>
   );
 }

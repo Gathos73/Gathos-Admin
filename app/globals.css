@@ -2491,6 +2491,7 @@ button:disabled {
   box-shadow: var(--shadow-sm);
   min-width: 0;
   overflow: clip;
+  margin: 16px 0;
 }
 
 .record-page-panel-header {
@@ -6183,4 +6184,51 @@ button:disabled {
   .monitor-page .gpu-health-actions { flex-wrap: wrap; }
   .monitor-page .gpu-detail-list > div { flex-wrap: wrap; gap: 6px; }
   .monitor-page .gpu-detail-list dd { overflow-wrap: anywhere; }
+}
+
+/* Read-only record view: keep the muted background, but make locked values legible. */
+.record-form--readonly .form-field input:disabled,
+.record-form--readonly .form-field select:disabled,
+.record-form--readonly .form-field textarea:disabled {
+  color: var(--ink);
+  -webkit-text-fill-color: var(--ink);
+  cursor: default;
+  opacity: 1;
+}
+
+/* Read-only selected-items card (plan products on the view screen). */
+.transfer-list-card--static {
+  flex: none; /* the base card's flex-basis of 0 collapses it inside a column form field */
+  height: auto;
+  max-height: 330px;
+}
+
+.transfer-list-item--static {
+  cursor: default;
+}
+
+.transfer-list-item--static:hover {
+  background-color: transparent;
+}
+
+.record-user-inline-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px 24px;
+  margin: 0;
+  padding: 16px 20px 20px;
+}
+
+.record-user-inline-grid dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.record-user-inline-grid dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }

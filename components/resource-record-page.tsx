@@ -34,10 +34,11 @@ import {
   PlusIcon,
   RefreshIcon,
 } from "./icons";
-import { RecordDetail, recordLabel } from "./record-detail";
+import { recordLabel } from "../lib/record-label";
 import { RecordForm } from "./record-form";
 import { PlanLimitsCreateInline, PlanLimitsInline } from "./plan-limits-inline";
 import { ProductRoutesInline } from "./product-routes-inline";
+import { RecordUserInline } from "./record-user-inline";
 import { ToastViewport, useToast } from "./toast";
 import { UserPasswordDialog } from "./user-password-form";
 
@@ -80,9 +81,12 @@ function primaryRecordFields(resourceKey: ResourceKey, record: ResourceRecord): 
   const fields = { ...record };
   if (resourceKey === "plans") {
     delete fields.plan_limits;
-    delete fields.plan_products;
   } else if (resourceKey === "products") {
     delete fields.product_routes;
+  } else if (resourceKey === "api_keys") {
+    // Shown in the user section below the form.
+    delete fields.user;
+    delete fields.user_id;
   } else if (resourceKey === "users") {
     for (const field of [
       "window_limit",
@@ -93,6 +97,11 @@ function primaryRecordFields(resourceKey: ResourceKey, record: ResourceRecord): 
       "tier_override",
     ]) {
       delete fields[field];
+    }
+    // Derived from the plan's products/limits (e.g. image2image_window_limit).
+    delete fields.product_codes;
+    for (const key of Object.keys(fields)) {
+      if (key.endsWith("_window_limit")) delete fields[key];
     }
   }
   return fields;
@@ -472,9 +481,12 @@ export function ResourceRecordPage({
                 ) : null}
               </RecordForm>
             ) : (
-              <RecordDetail
+              <RecordForm
                 config={config}
-                record={primaryRecordFields(resourceKey, record)}
+                initialRecord={primaryRecordFields(resourceKey, record)}
+                key={`view-${recordId}-${refreshVersion}`}
+                mode="edit"
+                readOnly
               />
             )}
           </div>
@@ -497,6 +509,10 @@ export function ResourceRecordPage({
           productId={recordId}
           routes={objectRows(record.product_routes)}
         />
+      ) : null}
+
+      {resourceKey === "api_keys" && record && mode === "view" ? (
+        <RecordUserInline record={record} />
       ) : null}
 
       <ConfirmDialog

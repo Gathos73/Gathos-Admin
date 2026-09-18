@@ -34,7 +34,7 @@ import {
   RefreshIcon,
   SearchIcon,
 } from "./icons";
-import { recordLabel } from "./record-detail";
+import { recordLabel } from "../lib/record-label";
 import { RecordForm } from "./record-form";
 import { PlanLimitsCreateInline } from "./plan-limits-inline";
 import { ProductRoutesCreateInline } from "./product-routes-inline";
