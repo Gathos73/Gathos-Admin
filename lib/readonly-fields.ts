@@ -2,6 +2,8 @@ import type { ResourceConfig, ResourceField, ResourceRecord } from "./types";
 
 // Rendered by dedicated inline sections (limits, routes) or used only for labels.
 const INLINE_KEYS = new Set(["plan_limits", "plan_products", "product_routes"]);
+// Shown in the record summary at the top of the page.
+const SUMMARY_KEYS = ["id", "created_at", "updated_at"];
 
 function humanize(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -13,8 +15,10 @@ function humanize(value: string): string {
  * edit form while still showing metadata and resources without editable fields.
  */
 export function readOnlyFields(config: ResourceConfig, record: ResourceRecord): ResourceField[] {
+  const summary = new Set([config.primaryKey, ...SUMMARY_KEYS]);
   const fields = config.fields.filter(
-    (field) => !field.createOnly && field.kind !== "password" && !field.confirms,
+    (field) =>
+      !field.createOnly && field.kind !== "password" && !field.confirms && !summary.has(field.name),
   );
   const known = new Set(fields.map((field) => field.name));
   // Names shown as a relation's label (plan -> plan_name) are not separate rows.
@@ -32,7 +36,7 @@ export function readOnlyFields(config: ResourceConfig, record: ResourceRecord): 
 
   const extras: ResourceField[] = [];
   for (const name of new Set([...preferred, ...Object.keys(record)])) {
-    if (known.has(name) || INLINE_KEYS.has(name) || record[name] === undefined) continue;
+    if (known.has(name) || summary.has(name) || INLINE_KEYS.has(name) || record[name] === undefined) continue;
     const value = record[name];
     extras.push({
       name,
