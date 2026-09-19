@@ -28,7 +28,9 @@ export type RegisteredService = ServiceWrite & { service_id: string; version: nu
 export type RegisteredGpu = Omit<GpuWrite, "services"> & {
   gpu_id: string; revision: number; etag: string; services: RegisteredService[];
   credential_labels?: Record<string, string>;
-  sharing_policy: "exclusive"; max_active_jobs: 1; created_at: string; updated_at: string;
+  sharing_policy: "exclusive" | "service_exclusive"; max_active_jobs: 1 | null;
+  max_active_jobs_per_service?: 1; reservation_authority?: "backend" | "proxy";
+  created_at: string; updated_at: string;
   reservation: { reservation_id: string; state: string; expires_at: string } | null;
 };
 export type GpuList = { items: RegisteredGpu[]; next_cursor: string | null };
