@@ -465,6 +465,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
       { name: "user_agent", label: "User agent", kind: "textarea", nullable: true, createOnly: true },
     ],
     searchFields: [
+      { label: "User email", value: "user_email" },
       { label: "Prompt", value: "prompt" },
       { label: "Job ID", value: "job_id" },
       { label: "Plan", value: "plan" },

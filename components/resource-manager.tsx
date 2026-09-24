@@ -25,6 +25,7 @@ import {
 import { getResourceConfig } from "../lib/resources";
 import type { JsonObject, ResourceKey, ResourceListResponse, ResourceRecord } from "../lib/types";
 import { ConfirmDialog } from "./confirm-dialog";
+import { GenerationFilters } from "./generation-filters";
 import { DataTable } from "./data-table";
 import {
   AlertIcon,
@@ -162,9 +163,15 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
   const filterValue = searchParams.get("filter_value") ?? "";
   const hasFilterValue = searchParams.has("filter_value");
 
+  const plan = resourceKey === "generations" ? searchParams.get("plan") ?? (filterBy === "plan" ? filterValue : "") : "";
+  const product = resourceKey === "generations" ? searchParams.get("product") ?? (filterBy === "type" ? filterValue : "") : "";
+  const createdFrom = resourceKey === "generations" ? searchParams.get("created_from") ?? "" : "";
+  const createdTo = resourceKey === "generations" ? searchParams.get("created_to") ?? "" : "";
+
   const [refreshVersion, setRefreshVersion] = useState(0);
   const requestKey = JSON.stringify({
     descending,
+    plan, product, createdFrom, createdTo,
     filterBy,
     filterValue,
     hasFilterValue,
@@ -308,6 +315,7 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
         pageSize,
         orderBy,
         descending,
+        plan, product, createdFrom, createdTo,
         search: search || undefined,
         searchField: search ? searchField : undefined,
         filterBy: filterBy && hasFilterValue ? filterBy : undefined,
@@ -338,7 +346,7 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
       active = false;
       controller.abort();
     };
-  }, [descending, filterBy, filterValue, hasFilterValue, loadState.requestKey, orderBy, page, pageSize, requestKey, resourceKey, search, searchField]);
+  }, [plan, product, createdFrom, createdTo, descending, filterBy, filterValue, hasFilterValue, loadState.requestKey, orderBy, page, pageSize, requestKey, resourceKey, search, searchField]);
 
   const refresh = () => { clearRequestCache(); setRefreshVersion((version) => version + 1); };
 
@@ -524,6 +532,17 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
 
       <section className="resource-panel">
         <div className="resource-toolbar">
+          {resourceKey === "generations" ? <GenerationFilters
+            key={JSON.stringify({ search, searchField, plan, product, createdFrom, createdTo })}
+            initial={{ search, searchField, plan, product, createdFrom, createdTo }}
+            searchFields={config.searchFields}
+            onApply={(filters) => replaceParameters({
+              q: filters.search || null, search_field: filters.searchField,
+              plan: filters.plan || null, product: filters.product || null,
+              created_from: filters.createdFrom || null, created_to: filters.createdTo || null,
+              filter_by: null, filter_value: null, page: null,
+            })}
+          /> : <>
           <form className="search-form" onSubmit={submitSearch}>
             <span aria-hidden="true" className="search-prefix">
               <SearchIcon size={16} />
@@ -610,6 +629,7 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
               Clear
             </button>
           ) : null}
+          </>}
         </div>
 
         {config.canBulkDelete && selectedIds.length > 0 ? (

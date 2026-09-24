@@ -6232,3 +6232,6 @@ button:disabled {
   font-size: 13px;
   overflow-wrap: anywhere;
 }
+
+.generation-filter-form { flex-wrap: wrap; align-items: end; width: 100%; }
+.generation-filter-form label { display: grid; gap: 6px; font-size: 13px; }

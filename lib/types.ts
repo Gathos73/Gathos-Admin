@@ -145,6 +145,10 @@ export interface ResourceQuery {
   searchField?: string;
   filterBy?: string;
   filterValue?: string;
+  plan?: string;
+  product?: string;
+  createdFrom?: string;
+  createdTo?: string;
 }
 
 export interface ResourceListResponse {
