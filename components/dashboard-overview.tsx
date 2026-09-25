@@ -21,7 +21,7 @@ import {
   ProductIcon,
 } from "@/components/icons";
 
-import { UsageChart, UsageWindow, SERVICES, formatTimestamp, serviceLabel } from "@/components/usage-chart";
+import { UsageChart, UsageWindow, SERVICES, SERVICE_COLORS, formatTimestamp, serviceLabel } from "@/components/usage-chart";
 
 // Product badges configuration
 const PRODUCT_COLORS: Record<string, { bg: string; text: string; dot: string; label: string }> = {
@@ -485,6 +485,14 @@ export function DashboardOverview() {
             </p>
           </div>
 
+          <div className="graph-legend">
+            {(["all", ...SERVICES] as const).map((service) => (
+              <div className="legend-item" key={service}>
+                <span className="legend-dot" style={{ background: SERVICE_COLORS[service] }} />
+                <span>{service === "all" ? "All services" : serviceLabel(service)}</span>
+              </div>
+            ))}
+          </div>
         </div>
         {timeline ? <UsageWindow start={timeline.start_time} end={timeline.end_time} /> : null}
 
@@ -496,14 +504,9 @@ export function DashboardOverview() {
             </button>
           </div>
         ) : (
-          timeline ? <div className="usage-service-charts">
-            {(["all", ...SERVICES] as const).filter((service) => selectedProduct === "all" || service === "all" || service === selectedProduct).map((service) => (
-              <section className="usage-service-chart" key={`${timeWindow}-${selectedProduct}-${service}`}>
-                <h3>{service === "all" ? selectedProduct === "all" ? "All services combined" : "Selected product total" : serviceLabel(service)}</h3>
-                <UsageChart series={chartSeries} service={service} periodStart={timeline.start_time} periodEnd={timeline.end_time} sampledAt={sampledAt}
-                  bucketMinutes={timeline.time_window === "7d" ? 360 : timeline.time_window === "24h" ? 60 : 10} />
-              </section>
-            ))}
+          timeline ? <div className="overview-graph-wrapper usage-service-chart">
+            <UsageChart key={`${timeWindow}-${selectedProduct}`} series={chartSeries} periodStart={timeline.start_time} periodEnd={timeline.end_time} sampledAt={sampledAt}
+              bucketMinutes={timeline.time_window === "7d" ? 360 : timeline.time_window === "24h" ? 60 : 10} />
           </div> : <p>Loading usage charts…</p>
         )}
         {timeline ? <p className="card-description">As of {formatTimestamp(sampledAt)} · Axis times are local</p> : null}

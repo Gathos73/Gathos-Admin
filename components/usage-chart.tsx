@@ -6,8 +6,7 @@ export type UsagePoint = {
   date: string; total: number; image: number; image2image: number; tts: number; video: number;
 };
 export const SERVICES = ["image", "image2image", "tts", "video"] as const;
-type ServiceFilter = "all" | (typeof SERVICES)[number];
-const SERVICE_COLORS = { all: "#078a52", image: "#0284c7", image2image: "#d97706", tts: "#059669", video: "#7c3aed" };
+export const SERVICE_COLORS = { all: "#02492a", image: "#0284c7", image2image: "#d97706", tts: "#059669", video: "#7c3aed" };
 const numberFormatter = new Intl.NumberFormat("en-US");
 const compactFormatter = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 
@@ -35,15 +34,14 @@ export function UsageWindow({ start, end }: { start: string; end: string }) {
   </div>;
 }
 
-export function UsageChart({ series, service, bucketMinutes, sampledAt, periodStart, periodEnd }: {
-  series: UsagePoint[]; service: ServiceFilter; bucketMinutes: number; sampledAt: string; periodStart: string; periodEnd: string;
+export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, periodEnd }: {
+  series: UsagePoint[]; bucketMinutes: number; sampledAt: string; periodStart: string; periodEnd: string;
 }) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const available = series.filter((point) => new Date(point.date).getTime() <= new Date(sampledAt).getTime());
   const start = new Date(periodStart).getTime();
   const end = Math.max(start, new Date(periodEnd).getTime());
   const duration = Math.max(1, end - start);
-  const valueOf = (point: UsagePoint) => service === "all" ? point.total : point[service];
   const activeIndex = Math.min(selectedIndex ?? Math.max(0, available.length - 1), Math.max(0, available.length - 1));
   const active = available[activeIndex];
   const width = 780;
@@ -54,19 +52,26 @@ export function UsageChart({ series, service, bucketMinutes, sampledAt, periodSt
   const bottom = 32;
   const chartWidth = width - left - right;
   const chartHeight = height - top - bottom;
-  const actualMaxValue = Math.max(0, ...available.map(valueOf));
+  const actualMaxValue = Math.max(0, ...available.map((point) => point.total));
   // Use whole-request ticks and let sparse activity occupy visible chart space.
   const tickStep = Math.max(1, Math.ceil(actualMaxValue / 4));
   const roundedMax = tickStep * 4;
-  const coordinates = available.map((point) => ({
-    x: left + ((new Date(point.date).getTime() - start) / duration) * chartWidth,
-    y: top + chartHeight - (valueOf(point) / roundedMax) * chartHeight,
-  }));
-  const linePath = coordinates
-    .map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
-    .join(" ");
+  const lines = (["all", ...SERVICES] as const).map((service) => {
+    const coordinates = available.map((point) => ({
+      x: left + ((new Date(point.date).getTime() - start) / duration) * chartWidth,
+      y: top + chartHeight - ((service === "all" ? point.total : point[service]) / roundedMax) * chartHeight,
+    }));
+    // Horizontal control points preserve the original smooth curve without overshoot.
+    const path = coordinates.map((point, index) => {
+      if (index === 0) return `M${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
+      const previous = coordinates[index - 1];
+      const third = (point.x - previous.x) / 3;
+      return `C${(previous.x + third).toFixed(2)} ${previous.y.toFixed(2)} ${(point.x - third).toFixed(2)} ${point.y.toFixed(2)} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
+    }).join(" ");
+    return { service, coordinates, path };
+  });
+  const coordinates = lines[0].coordinates;
   const ticks = end > start ? [start, start + (end - start) / 2, end] : [start];
-  const color = SERVICE_COLORS[service];
 
   return (
     <div className="usage-chart-wrap" tabIndex={0} role="group"
@@ -81,7 +86,7 @@ export function UsageChart({ series, service, bucketMinutes, sampledAt, periodSt
       }}>
 
       <svg
-        aria-label={`${service === "all" ? "All services" : serviceLabel(service)} request volume. Peak interval: ${actualMaxValue} requests.`}
+        aria-label={`Combined and individual service request volume. Peak interval: ${actualMaxValue} requests.`}
         onPointerMove={(event) => {
           const rect = event.currentTarget.getBoundingClientRect();
           const x = (event.clientX - rect.left) / rect.width * width;
@@ -104,16 +109,23 @@ export function UsageChart({ series, service, bucketMinutes, sampledAt, periodSt
             </g>
           );
         })}
-        {linePath ? <path className="chart-line" d={linePath} style={{ stroke: color }} /> : null}
-        {coordinates.map((point, index) => (
-          <circle className="chart-point" style={{ fill: color }} cx={point.x} cy={point.y} key={available[index].date} r="2.7">
-            <title>{`${formatTimestamp(available[index].date)}: ${valueOf(available[index])} requests`}</title>
-          </circle>
+        {lines.map(({ service, coordinates: points, path }) => (
+          <g key={service} aria-label={service === "all" ? "All services combined" : serviceLabel(service)}>
+            {path ? <path className="chart-line" data-service={service} d={path} style={{ stroke: SERVICE_COLORS[service] }} /> : null}
+            {points.map((point, index) => (
+              <circle className="chart-point" style={{ fill: "white", stroke: SERVICE_COLORS[service] }}
+                cx={point.x} cy={point.y} key={available[index].date} r="2.7">
+                <title>{`${formatTimestamp(available[index].date)} · ${service === "all" ? "All services" : serviceLabel(service)}: ${service === "all" ? available[index].total : available[index][service]} requests`}</title>
+              </circle>
+            ))}
+          </g>
         ))}
         {selectedIndex !== null && active && coordinates[activeIndex] ? (
           <g aria-hidden="true">
             <line className="chart-crosshair" x1={coordinates[activeIndex].x} x2={coordinates[activeIndex].x} y1={top} y2={top + chartHeight} />
-            <circle className="chart-active-point" cx={coordinates[activeIndex].x} cy={coordinates[activeIndex].y} r="5" />
+            {lines.map(({ service, coordinates: points }) => (
+              <circle key={service} className="chart-active-point" style={{ stroke: SERVICE_COLORS[service] }} cx={points[activeIndex].x} cy={points[activeIndex].y} r="5" />
+            ))}
           </g>
         ) : null}
         {ticks.map((timestamp, index) => (
@@ -128,11 +140,8 @@ export function UsageChart({ series, service, bucketMinutes, sampledAt, periodSt
         <div className="chart-inspector chart-hover-details">
           <div className="chart-inspector-summary" aria-live="polite" aria-atomic="true">
             <time dateTime={active.date}>{formatTimestamp(active.date)} – {new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(new Date(Math.min(new Date(active.date).getTime() + bucketMinutes * 60000, new Date(sampledAt).getTime())))}</time>
-            <strong>{numberFormatter.format(valueOf(active))} requests · {service === "all" ? "All services" : serviceLabel(service)}</strong>
+            <strong>{numberFormatter.format(active.total)} requests · All services</strong>
           </div>
-          {service !== "all" && valueOf(active) === 0 && active.total > 0 ? (
-            <p className="analytics-period">This interval has activity in other services.</p>
-          ) : null}
           <p className="analytics-period">All services in this interval</p>
           <div className="chart-inspector-services">
             {SERVICES.map((type) => <span key={type}><i className={`legend-dot legend-dot--${type}`} style={{ background: SERVICE_COLORS[type] }} />{serviceLabel(type)} <strong>{numberFormatter.format(active[type])}</strong></span>)}
