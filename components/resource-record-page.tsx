@@ -31,7 +31,6 @@ import {
   DeleteIcon,
   EditIcon,
   KeyIcon,
-  PlusIcon,
   RefreshIcon,
 } from "./icons";
 import { recordLabel } from "../lib/record-label";
@@ -353,10 +352,10 @@ export function ResourceRecordPage({
           {canResetUserPassword ? (
             <Link
               className="button button--secondary"
-              href={`/plans?create_for_user=${encodedId}`}
+              href={`/users/${encodedId}/customize-limits`}
             >
-              <PlusIcon size={15} />
-              Create custom plan
+              <EditIcon size={15} />
+              Customize limits
             </Link>
           ) : null}
           {canResetUserPassword ? (

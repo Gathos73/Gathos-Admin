@@ -51,10 +51,12 @@ function ProductLimitFields({
   draft,
   onChange,
   showDelete = false,
+  concurrencyMinimum = 1,
 }: {
   draft: ProductLimitDraft;
   onChange: (draft: ProductLimitDraft) => void;
   showDelete?: boolean;
+  concurrencyMinimum?: number;
 }) {
   const change = (changes: Partial<ProductLimitDraft>) => onChange({ ...draft, ...changes });
 
@@ -101,7 +103,7 @@ function ProductLimitFields({
         <span>Concurrency limit <span className="form-field-requirement">(Optional)</span></span>
         <input
           aria-label="Concurrency limit"
-          min={1}
+          min={concurrencyMinimum}
           onChange={(e) => change({ concurrencyLimit: e.target.value })}
           placeholder="e.g. 3 (blank: unlimited)"
           step={1}
@@ -208,12 +210,14 @@ export function PlanLimitsCreateInline({
   error,
   onChange,
   submitting,
+  concurrencyMinimum = 1,
 }: {
   allowedProducts: { id: string; code: string; name: string }[];
   drafts: ProductLimitDraft[];
   error: string;
   onChange: (drafts: ProductLimitDraft[]) => void;
   submitting: boolean;
+  concurrencyMinimum?: number;
 }) {
   const productCache = useProductCache();
   const update = (index: number, draft: ProductLimitDraft) =>
@@ -257,7 +261,7 @@ export function PlanLimitsCreateInline({
                     <span className="plan-limit-product-code">{productCode}</span>
                   ) : null}
                 </div>
-                <ProductLimitFields draft={resolvedDraft} onChange={(next) => update(index, next)} />
+                <ProductLimitFields draft={resolvedDraft} onChange={(next) => update(index, next)} concurrencyMinimum={concurrencyMinimum} />
               </article>
             );
           })}

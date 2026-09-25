@@ -12,6 +12,32 @@ import type {
 
 const BACKEND_PROXY = "/api/backend";
 
+export interface UserLimits {
+  user: { id: string; email: string };
+  entitlement_id: string;
+  plan: { id: string; code: string; display_name: string };
+  custom_plan: { code: string; display_name: string };
+  plan_fixed_window_limit: number | null;
+  plan_queue_depth_limit: number | null;
+  plan_concurrency_limit: number | null;
+  product_limits: {
+    product_id: string; code: string; name: string;
+    fixed_window_limit: number | null; queue_depth_limit: number | null; concurrency_limit: number | null;
+  }[];
+}
+
+export function getUserLimits(userId: string, signal?: AbortSignal): Promise<UserLimits> {
+  return apiFetch(`${BACKEND_PROXY}/api/admin/users/${encodeURIComponent(userId)}/customize-limits`, { signal }, true);
+}
+
+export function customizeUserLimits(userId: string, body: JsonObject): Promise<{
+  user_id: string; plan_id: string; plan_code: string; display_name: string; entitlement_id: string;
+}> {
+  return apiFetch(`${BACKEND_PROXY}/api/admin/users/${encodeURIComponent(userId)}/customize-limits`, {
+    method: "POST", body: JSON.stringify(body),
+  });
+}
+
 export type ResourceMetrics = {
   cpu_percent: number | null; uptime_seconds: number | null;
   memory: { total_bytes: number | null; used_bytes: number | null; used_percent: number | null };

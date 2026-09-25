@@ -174,6 +174,7 @@ function parseOptionalInt(value: string, fieldLabel: string, min = 0): { error?:
 export function serializePlanLimitDrafts(
   drafts: ProductLimitDraft[],
   allowedProductIds: string[],
+  concurrencyMinimum = 1,
 ): { error?: string; rows?: JsonObject[] } {
   const allowed = new Set(allowedProductIds);
   const seenProducts = new Set<string>();
@@ -197,7 +198,7 @@ export function serializePlanLimitDrafts(
     const queueDepthLimit = parseOptionalInt(draft.queueDepthLimit, `${label} queue depth limit`);
     if (queueDepthLimit.error) return { error: queueDepthLimit.error };
 
-    const concurrencyLimit = parseOptionalInt(draft.concurrencyLimit, `${label} concurrency limit`, 1);
+    const concurrencyLimit = parseOptionalInt(draft.concurrencyLimit, `${label} concurrency limit`, concurrencyMinimum);
     if (concurrencyLimit.error) return { error: concurrencyLimit.error };
 
     rows.push({

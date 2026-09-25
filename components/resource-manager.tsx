@@ -9,7 +9,6 @@ import {
   ApiError,
   createResource,
   deleteResource,
-  getResourceRecord,
   listResource,
 } from "../lib/api";
 import {
@@ -204,8 +203,6 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
   const searchDraft = searchDraftOverride ?? search;
   const filterDraft = filterDraftOverride ?? filterValue;
   const [drawer, setDrawer] = useState<DrawerState>({ mode: "closed" });
-  const [customPlanUser, setCustomPlanUser] = useState<ResourceRecord | null>(null);
-  const [createDefaults, setCreateDefaults] = useState<ResourceRecord | undefined>(undefined);
   const [inlineDrafts, setInlineDrafts] = useState<CatalogInlineDrafts>(
     EMPTY_CATALOG_INLINE_DRAFTS,
   );
@@ -214,30 +211,8 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
   const [productCatalog, setProductCatalog] = useState<{ id: string; code: string; name: string }[]>([]);
 
   useEffect(() => {
-    if (!customPlanUserId) return;
-    const controller = new AbortController();
-    void getResourceRecord("users", customPlanUserId, controller.signal)
-      .then(({ row }) => {
-        if (controller.signal.aborted) return;
-        if (!row || row.status === "deleted" || row.deleted_at) {
-          throw new Error("This user is no longer available.");
-        }
-        setCustomPlanUser(row);
-        setCreateDefaults({
-          code: `custom_${String(row.id).replaceAll("-", "")}_${Date.now().toString(36)}`,
-          display_name: `Custom plan for ${String(row.name || row.email)}`,
-          is_public: false,
-        });
-        setInlineDrafts({ planLimits: [], productRoutes: [] });
-        setPlanProducts([]);
-        setInlineError("");
-        setDrawer({ mode: "create" });
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) pushToast(getErrorMessage(error), "error");
-      });
-    return () => controller.abort();
-  }, [customPlanUserId, pushToast]);
+    if (customPlanUserId) router.replace(`/users/${encodeURIComponent(customPlanUserId)}/customize-limits`);
+  }, [customPlanUserId, router]);
 
   useEffect(() => {
     if (resourceKey !== "plans" || drawer.mode === "closed" || productCatalog.length) return;
@@ -351,8 +326,6 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
   const refresh = () => { clearRequestCache(); setRefreshVersion((version) => version + 1); };
 
   const openCreate = () => {
-    setCustomPlanUser(null);
-    setCreateDefaults(undefined);
     if (customPlanUserId) replaceParameters({ create_for_user: null });
     setInlineDrafts({ planLimits: [], productRoutes: [] });
     setInlineError("");
@@ -362,8 +335,6 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
 
   const closeCreate = () => {
     setDrawer({ mode: "closed" });
-    setCustomPlanUser(null);
-    setCreateDefaults(undefined);
     if (customPlanUserId) replaceParameters({ create_for_user: null });
   };
 
@@ -451,13 +422,6 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
       }
       pushToast(`${config.labelSingular} created.`, "success");
       setPendingPlan(null);
-      const createdPlan = response.row;
-      if (resourceKey === "plans" && customPlanUser && createdPlan && typeof createdPlan === "object" && !Array.isArray(createdPlan) && createdPlan.id) {
-        clearRequestCache();
-        setDrawer({ mode: "closed" });
-        router.push(`/plans/${encodeURIComponent(String(createdPlan.id))}?invite_user=${encodeURIComponent(String(customPlanUser.id))}`);
-        return;
-      }
       closeCreate();
       refresh();
     } catch (error) {
@@ -744,7 +708,7 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
             <div className="drawer-header">
               <div>
                 <p className="resource-eyebrow">{config.label}</p>
-                <h2 id="record-drawer-title">{customPlanUser ? "Create custom plan" : `Add ${config.labelSingular}`}</h2>
+                <h2 id="record-drawer-title">{`Add ${config.labelSingular}`}</h2>
               </div>
               <button
                 aria-label="Close drawer"
@@ -757,13 +721,9 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
               </button>
             </div>
             <div className="drawer-body">
-              {customPlanUser ? (
-                <p>For {String(customPlanUser.email)}. The plan starts private. Creating it does not change the user’s current plan; invite them after configuring payment or assign it from their profile.</p>
-              ) : null}
               <RecordForm
                 config={config}
-                initialRecord={createDefaults}
-                key={`create-${resourceKey}-${customPlanUser?.id ?? "general"}`}
+                key={`create-${resourceKey}`}
                 mode="create"
                 onCancel={closeCreate}
                 onFieldValueChange={(name, value) => {
