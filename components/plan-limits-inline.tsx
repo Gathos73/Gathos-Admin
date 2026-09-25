@@ -74,36 +74,36 @@ function ProductLimitFields({
         />
       </label>
       <label>
-        <span>Fixed-window limit</span>
+        <span>Fixed-window limit <span className="form-field-requirement">(Optional)</span></span>
         <input
           aria-label="Fixed window limit"
           min={0}
           onChange={(e) => change({ fixedWindowLimit: e.target.value })}
-          placeholder="Unlimited"
+          placeholder="e.g. 100 (blank: unlimited)"
           step={1}
           type="number"
           value={draft.fixedWindowLimit}
         />
       </label>
       <label>
-        <span>Queue depth limit</span>
+        <span>Queue depth limit <span className="form-field-requirement">(Optional)</span></span>
         <input
           aria-label="Queue depth limit"
           min={0}
           onChange={(e) => change({ queueDepthLimit: e.target.value })}
-          placeholder="Unlimited"
+          placeholder="e.g. 10 (blank: unlimited)"
           step={1}
           type="number"
           value={draft.queueDepthLimit}
         />
       </label>
       <label>
-        <span>Concurrency limit</span>
+        <span>Concurrency limit <span className="form-field-requirement">(Optional)</span></span>
         <input
           aria-label="Concurrency limit"
           min={1}
           onChange={(e) => change({ concurrencyLimit: e.target.value })}
-          placeholder="Unlimited"
+          placeholder="e.g. 3 (blank: unlimited)"
           step={1}
           type="number"
           value={draft.concurrencyLimit}

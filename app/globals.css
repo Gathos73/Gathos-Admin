@@ -1852,6 +1852,12 @@ button:disabled {
   font-weight: 650;
 }
 
+.form-field-requirement {
+  color: var(--muted);
+  font-size: 0.9em;
+  font-weight: 400;
+}
+
 .checkbox-field {
   align-items: center;
   background: #fafafd;

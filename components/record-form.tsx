@@ -210,6 +210,9 @@ export function RecordForm({
             const helpId = `${field.name}-help`;
             const disabled = readOnly || (mode === "edit" && field.immutableOnEdit);
             const describedBy = error ? errorId : field.help ? helpId : undefined;
+            const requirement = !readOnly && config.key === "plans"
+              ? <span className="form-field-requirement"> ({field.required ? "Required" : "Optional"})</span>
+              : null;
 
             const FieldWrapper = field.kind === "relations" ? "div" : "label";
 
@@ -229,12 +232,12 @@ export function RecordForm({
                       }
                       type="checkbox"
                     />
-                    <span>{field.label}</span>
+                    <span>{field.label}{requirement}</span>
                   </span>
                 ) : (
                   <span className="form-label">
                     {field.label}
-                    {field.required ? <span aria-hidden="true"> *</span> : null}
+                    {requirement || (field.required ? <span aria-hidden="true"> *</span> : null)}
                   </span>
                 )}
 
