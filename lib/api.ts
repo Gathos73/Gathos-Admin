@@ -15,6 +15,8 @@ const BACKEND_PROXY = "/api/backend";
 export interface UserLimits {
   user: { id: string; email: string };
   entitlement_id: string;
+  revision: string;
+  mode: "create" | "update";
   plan: { id: string; code: string; display_name: string };
   custom_plan: { code: string; display_name: string };
   plan_fixed_window_limit: number | null;

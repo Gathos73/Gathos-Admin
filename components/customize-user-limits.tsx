@@ -56,7 +56,7 @@ export function CustomizeUserLimits({ userId }: { userId: string }) {
     event.preventDefault();
     if (!data || saving.current) return;
     setError("");
-    const payload: JsonObject = { expected_entitlement_id: data.entitlement_id };
+    const payload: JsonObject = { expected_entitlement_id: data.entitlement_id, expected_revision: data.revision };
     for (const field of overallFields) {
       const raw = overall[field.key].trim();
       const value = raw === "" ? null : Number(raw);
@@ -93,7 +93,9 @@ export function CustomizeUserLimits({ userId }: { userId: string }) {
     <header className="record-page-header">
       <div>
         <p className="resource-eyebrow">User limits</p><h1>Customize limits</h1>
-        <p>Save a private copy of this user’s current plan with the limits below and assign it immediately. Billing stays the same.</p>
+        <p>{data?.mode === "update"
+          ? "Update the limits on this user’s existing private plan. Its name and billing stay the same."
+          : "Save a private copy of this user’s current plan with the limits below and assign it immediately. Billing stays the same."}</p>
       </div>
       <Link className="button button--secondary" href={userPath}>Back to user</Link>
     </header>
@@ -104,7 +106,7 @@ export function CustomizeUserLimits({ userId }: { userId: string }) {
         <header className="record-page-panel-header"><div>
           <h2>{data.user.email}</h2>
           <p>Current plan: {data.plan.display_name}</p>
-          <p>Private plan: {data.custom_plan.display_name}</p>
+          <p>{data.mode === "update" ? "Updating private plan" : "New private plan"}: {data.custom_plan.display_name}</p>
         </div></header>
       </section>
       <section className="record-page-panel">
