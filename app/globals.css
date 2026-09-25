@@ -6241,3 +6241,30 @@ button:disabled {
 
 .generation-filter-form { flex-wrap: wrap; align-items: end; width: 100%; }
 .generation-filter-form label { display: grid; gap: 6px; font-size: 13px; }
+
+/* Usage charts share full-window axes and remain readable on narrow screens. */
+.usage-window { color: var(--muted, #64748b); font-size: 12px; line-height: 1.6; margin: 0 20px 16px; }
+.chart-panel .usage-window { margin: 8px 0; }
+.usage-window p { margin: 0; }
+.usage-service-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; padding: 0 20px 20px; }
+.chart-panel .usage-service-charts { padding: 0; }
+.usage-service-chart { min-width: 0; }
+.usage-service-chart:first-child { grid-column: 1 / -1; }
+.usage-service-chart h3 { font-size: 14px; margin: 12px 0; }
+.usage-service-chart .usage-chart-wrap { position: relative; width: 100%; min-height: 0; margin: 0; }
+.usage-service-chart .usage-chart-wrap:focus-visible { outline: 2px solid #078a52; outline-offset: 4px; }
+.usage-service-chart .usage-chart { display: block; width: 100%; height: auto; overflow: visible; }
+.usage-service-chart .chart-gridline { stroke: var(--border, #edf0f5); stroke-width: 1; }
+.usage-service-chart .chart-axis-label { fill: var(--muted, #64748b); font-family: inherit; font-size: 14px; }
+.usage-service-chart .chart-line { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; filter: none; }
+.usage-service-chart .chart-point { stroke: none; }
+.usage-service-chart .chart-crosshair { stroke: #64748b; stroke-dasharray: 4 4; }
+.usage-service-chart .chart-active-point { fill: white; stroke: #078a52; stroke-width: 2; }
+.usage-service-chart .chart-hover-details { position: absolute; top: 0; right: 8px; padding: 12px; max-width: calc(100% - 16px); background: var(--surface, #fff); color: var(--ink, #1f2937); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; font-size: 12px; pointer-events: none; box-shadow: 0 4px 18px #00000012; z-index: 1; }
+.usage-service-chart .chart-inspector-summary { display: grid; gap: 4px; }
+.usage-service-chart .chart-inspector-services { display: flex; flex-wrap: wrap; gap: 8px; }
+.usage-service-chart .chart-inspector-services span { display: inline-flex; align-items: center; gap: 4px; }
+.usage-service-chart .legend-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+@media (max-width: 1100px) {
+  .usage-service-charts { grid-template-columns: minmax(0, 1fr); }
+}

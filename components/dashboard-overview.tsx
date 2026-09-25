@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   getOverviewTimeline,
   getOverviewUserStats,
@@ -20,6 +20,8 @@ import {
   VelocityIcon,
   ProductIcon,
 } from "@/components/icons";
+
+import { UsageChart, UsageWindow, SERVICES, formatTimestamp, serviceLabel } from "@/components/usage-chart";
 
 // Product badges configuration
 const PRODUCT_COLORS: Record<string, { bg: string; text: string; dot: string; label: string }> = {
@@ -91,11 +93,6 @@ export function DashboardOverview() {
   const [refreshIntervalSec, setRefreshIntervalSec] = useState<number>(15);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // Interactive graph hover state
-  const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
-  const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
-  const graphSvgRef = useRef<SVGSVGElement | null>(null);
 
   // Debounce search input
   useEffect(() => {
@@ -248,108 +245,12 @@ export function DashboardOverview() {
     return () => clearInterval(interval);
   }, [refreshIntervalSec, timeWindow, selectedProduct, page, pageSize, debouncedSearch, orderBy, descending, activeOnly]);
 
-  // Graph geometry calculations
-  const graphWidth = 1000;
-  const graphHeight = 320;
-  const padding = { top: 28, right: 32, bottom: 46, left: 56 };
-  const innerWidth = graphWidth - padding.left - padding.right;
-  const innerHeight = graphHeight - padding.top - padding.bottom;
-
-  const points = useMemo(() => timeline?.points ?? [], [timeline]);
-
-  const maxCount = useMemo(() => {
-    const rawMax = Math.max(0, ...points.map((p) => p.count));
-    if (rawMax <= 5) return 5;
-    if (rawMax <= 20) return Math.ceil(rawMax / 5) * 5;
-    if (rawMax <= 100) return Math.ceil(rawMax / 20) * 20;
-    return Math.ceil((rawMax * 1.15) / 50) * 50;
-  }, [points]);
-
-  // Map coordinates
-  const coords = useMemo(() => {
-    if (points.length === 0) return [];
-    const n = points.length;
-    return points.map((p, i) => {
-      const x = padding.left + (n === 1 ? innerWidth / 2 : (i / (n - 1)) * innerWidth);
-      const y = padding.top + (1 - p.count / (maxCount || 1)) * innerHeight;
-      return { x, y, point: p, index: i };
-    });
-  }, [points, innerWidth, innerHeight, maxCount, padding.left, padding.top]);
-
-  // Generate SVG path for line and area
-  const { linePath, areaPath } = useMemo(() => {
-    if (coords.length === 0) return { linePath: "", areaPath: "" };
-    if (coords.length === 1) {
-      const p = coords[0];
-      return {
-        linePath: `M ${p.x - 20} ${p.y} L ${p.x + 20} ${p.y}`,
-        areaPath: `M ${p.x - 20} ${graphHeight - padding.bottom} L ${p.x - 20} ${p.y} L ${p.x + 20} ${p.y} L ${p.x + 20} ${graphHeight - padding.bottom} Z`,
-      };
-    }
-
-    // Build smooth cubic Bezier curve
-    let d = `M ${coords[0].x} ${coords[0].y}`;
-    for (let i = 0; i < coords.length - 1; i++) {
-      const curr = coords[i];
-      const next = coords[i + 1];
-      const cx1 = curr.x + (next.x - curr.x) / 3;
-      const cy1 = curr.y;
-      const cx2 = next.x - (next.x - curr.x) / 3;
-      const cy2 = next.y;
-      d += ` C ${cx1} ${cy1}, ${cx2} ${cy2}, ${next.x} ${next.y}`;
-    }
-
-    const first = coords[0];
-    const last = coords[coords.length - 1];
-    const area = `${d} L ${last.x} ${graphHeight - padding.bottom} L ${first.x} ${graphHeight - padding.bottom} Z`;
-
-    return { linePath: d, areaPath: area };
-  }, [coords, graphHeight, padding.bottom]);
-
-  // Y-axis ticks
-  const yTicks = useMemo(() => {
-    const ticks = [];
-    const count = 4;
-    for (let i = 0; i <= count; i++) {
-      const val = Math.round((maxCount / count) * i);
-      const y = padding.top + (1 - val / (maxCount || 1)) * innerHeight;
-      ticks.push({ val, y });
-    }
-    return ticks;
-  }, [maxCount, innerHeight, padding.top]);
-
-  // Handle pointer hover on graph
-  const handleGraphPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!graphSvgRef.current || coords.length === 0) return;
-    const rect = graphSvgRef.current.getBoundingClientRect();
-    const clientX = e.clientX - rect.left;
-    const clientY = e.clientY - rect.top;
-
-    // Scale clientX to SVG internal coordinate space (viewBox 1000)
-    const svgX = (clientX / rect.width) * graphWidth;
-
-    // Find nearest point
-    let closestIndex = 0;
-    let minDistance = Infinity;
-    coords.forEach((c, idx) => {
-      const dist = Math.abs(c.x - svgX);
-      if (dist < minDistance) {
-        minDistance = dist;
-        closestIndex = idx;
-      }
-    });
-
-    setHoveredPointIndex(closestIndex);
-    setHoverPos({ x: clientX, y: clientY });
-  };
-
-  const handleGraphPointerLeave = () => {
-    setHoveredPointIndex(null);
-    setHoverPos(null);
-  };
-
-  // Currently hovered point data
-  const hoveredCoord = hoveredPointIndex !== null ? coords[hoveredPointIndex] : null;
+  const chartSeries = useMemo(() => (timeline?.points ?? []).map((point) => ({
+    date: point.timestamp, total: point.count,
+    image: point.breakdown.image ?? 0, image2image: point.breakdown.image2image ?? 0,
+    tts: point.breakdown.tts ?? 0, video: point.breakdown.video ?? 0,
+  })), [timeline]);
+  const sampledAt = timeline ? new Date(Math.min(lastUpdated.getTime(), new Date(timeline.end_time).getTime())).toISOString() : "";
 
   // Most active product calculation for summary card
   const topProductSummary = useMemo(() => {
@@ -584,29 +485,8 @@ export function DashboardOverview() {
             </p>
           </div>
 
-          <div className="graph-legend">
-            <div className="legend-item">
-              <span className="legend-dot is-primary" />
-              <span>Generations</span>
-            </div>
-            {selectedProduct === "all" && (
-              <>
-                <div className="legend-item">
-                  <span className="legend-dot is-image" />
-                  <span>Image</span>
-                </div>
-                <div className="legend-item">
-                  <span className="legend-dot is-tts" />
-                  <span>TTS</span>
-                </div>
-                <div className="legend-item">
-                  <span className="legend-dot is-video" />
-                  <span>Video</span>
-                </div>
-              </>
-            )}
-          </div>
         </div>
+        {timeline ? <UsageWindow start={timeline.start_time} end={timeline.end_time} /> : null}
 
         {error ? (
           <div className="overview-error-state">
@@ -616,199 +496,17 @@ export function DashboardOverview() {
             </button>
           </div>
         ) : (
-          <div className="overview-graph-wrapper">
-            <svg
-              aria-label="Generation Time vs Count Live Chart"
-              className="overview-graph-svg"
-              preserveAspectRatio="xMidYMid meet"
-              ref={graphSvgRef}
-              role="img"
-              viewBox={`0 0 ${graphWidth} ${graphHeight}`}
-              onPointerLeave={handleGraphPointerLeave}
-              onPointerMove={handleGraphPointerMove}
-            >
-              <defs>
-                <linearGradient id="area-gradient" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="#078a52" stopOpacity="0.32" />
-                  <stop offset="60%" stopColor="#078a52" stopOpacity="0.08" />
-                  <stop offset="100%" stopColor="#078a52" stopOpacity="0.00" />
-                </linearGradient>
-                <linearGradient id="line-gradient" x1="0" x2="1" y1="0" y2="0">
-                  <stop offset="0%" stopColor="#02492a" />
-                  <stop offset="100%" stopColor="#078a52" />
-                </linearGradient>
-              </defs>
-
-              {/* Background Grid Lines */}
-              {yTicks.map((tick, i) => (
-                <g key={i}>
-                  <line
-                    stroke="rgba(0, 0, 0, 0.07)"
-                    strokeDasharray="4 4"
-                    x1={padding.left}
-                    x2={graphWidth - padding.right}
-                    y1={tick.y}
-                    y2={tick.y}
-                  />
-                  <text
-                    alignmentBaseline="middle"
-                    className="graph-axis-text"
-                    textAnchor="end"
-                    x={padding.left - 12}
-                    y={tick.y}
-                  >
-                    {tick.val}
-                  </text>
-                </g>
-              ))}
-
-              {/* Area Under Curve */}
-              {areaPath && (
-                <path className="graph-area-path" d={areaPath} fill="url(#area-gradient)" />
-              )}
-
-              {/* The Generation Trend Line */}
-              {linePath && (
-                <path
-                  className="graph-line-path"
-                  d={linePath}
-                  fill="none"
-                  stroke="url(#line-gradient)"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2.75"
-                />
-              )}
-
-              {/* Data Points (circles) */}
-              {coords.map((c, i) => {
-                if (c.point.count === 0 && hoveredPointIndex !== i) return null;
-                const isHovered = hoveredPointIndex === i;
-                return (
-                  <g key={i}>
-                    {isHovered && (
-                      <circle
-                        cx={c.x}
-                        cy={c.y}
-                        fill="rgba(7, 138, 82, 0.22)"
-                        r="12"
-                      />
-                    )}
-                    <circle
-                      className="graph-point-circle"
-                      cx={c.x}
-                      cy={c.y}
-                      fill="#ffffff"
-                      r={isHovered ? "6" : "3.5"}
-                      stroke="#078a52"
-                      strokeWidth={isHovered ? "3" : "2"}
-                    />
-                  </g>
-                );
-              })}
-
-              {/* Hover Cursor Vertical Guide Line */}
-              {hoveredCoord && (
-                <line
-                  className="graph-hover-line"
-                  stroke="rgba(7, 138, 82, 0.65)"
-                  strokeDasharray="3 3"
-                  strokeWidth="1.5"
-                  x1={hoveredCoord.x}
-                  x2={hoveredCoord.x}
-                  y1={padding.top}
-                  y2={graphHeight - padding.bottom}
-                />
-              )}
-
-              {/* X-Axis Tick Labels */}
-              {coords.map((c, i) => {
-                // Show labels at readable intervals
-                const step = coords.length > 20 ? Math.ceil(coords.length / 8) : 2;
-                const isFirst = i === 0;
-                const isLast = i === coords.length - 1;
-                const isStep = i % step === 0;
-                if (!isFirst && !isLast && !isStep) return null;
-
-                return (
-                  <text
-                    className="graph-axis-text"
-                    key={i}
-                    textAnchor={isFirst ? "start" : isLast ? "end" : "middle"}
-                    x={c.x}
-                    y={graphHeight - padding.bottom + 20}
-                  >
-                    {c.point.label}
-                  </text>
-                );
-              })}
-
-              {/* Empty state overlay if all counts are 0 */}
-              {timeline && timeline.total_generations === 0 && (
-                <g className="graph-empty-state-overlay">
-                  <rect
-                    fill="rgba(255, 255, 255, 0.85)"
-                    height={innerHeight}
-                    rx="8"
-                    width={innerWidth}
-                    x={padding.left}
-                    y={padding.top}
-                  />
-                  <text
-                    className="graph-empty-title"
-                    textAnchor="middle"
-                    x={graphWidth / 2}
-                    y={graphHeight / 2 - 8}
-                  >
-                    No generations recorded in this window yet
-                  </text>
-                  <text
-                    className="graph-empty-subtitle"
-                    textAnchor="middle"
-                    x={graphWidth / 2}
-                    y={graphHeight / 2 + 16}
-                  >
-                    Listening for incoming generation traffic… Switch to &quot;Last 7 Days&quot; to review historical throughput.
-                  </text>
-                </g>
-              )}
-            </svg>
-
-            {/* Floating Glassmorphic Tooltip */}
-            {hoveredCoord && hoverPos && (
-              <div
-                className="overview-tooltip"
-                style={{
-                  left: hoverPos.x,
-                  top: Math.max(12, hoverPos.y - 14),
-                  transform: "translate(-50%, -100%)",
-                }}
-              >
-                <div className="tooltip-header">
-                  <span className="tooltip-time">{hoveredCoord.point.label}</span>
-                  <span className="tooltip-badge">
-                    {hoveredCoord.point.count.toLocaleString()} gens
-                  </span>
-                </div>
-                <div className="tooltip-breakdown">
-                  {Object.entries(hoveredCoord.point.breakdown || {}).map(([code, count]) => {
-                    const color = PRODUCT_COLORS[code] || {
-                      dot: "#6b7280",
-                      label: code.toUpperCase(),
-                    };
-                    return (
-                      <div className="tooltip-row" key={code}>
-                        <span className="tooltip-dot" style={{ background: color.dot }} />
-                        <span className="tooltip-name">{color.label || code}</span>
-                        <span className="tooltip-count">{count.toLocaleString()}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
+          timeline ? <div className="usage-service-charts">
+            {(["all", ...SERVICES] as const).filter((service) => selectedProduct === "all" || service === "all" || service === selectedProduct).map((service) => (
+              <section className="usage-service-chart" key={`${timeWindow}-${selectedProduct}-${service}`}>
+                <h3>{service === "all" ? selectedProduct === "all" ? "All services combined" : "Selected product total" : serviceLabel(service)}</h3>
+                <UsageChart series={chartSeries} service={service} periodStart={timeline.start_time} periodEnd={timeline.end_time} sampledAt={sampledAt}
+                  bucketMinutes={timeline.time_window === "7d" ? 360 : timeline.time_window === "24h" ? 60 : 10} />
+              </section>
+            ))}
+          </div> : <p>Loading usage charts…</p>
         )}
+        {timeline ? <p className="card-description">As of {formatTimestamp(sampledAt)} · Axis times are local</p> : null}
       </section>
 
       {/* ── USER STATISTICS TABLE ── */}
