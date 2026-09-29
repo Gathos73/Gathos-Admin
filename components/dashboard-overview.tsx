@@ -479,10 +479,6 @@ export function DashboardOverview() {
             <h2 className="card-title" id="live-graph-heading">
               Generation Throughput
             </h2>
-            <p className="card-description">
-              {timeline?.window_label || "Selected timeframe"}
-              {selectedProduct !== "all" && ` • Filtered to ${selectedProduct.toUpperCase()}`}
-            </p>
           </div>
 
           <div className="graph-legend">

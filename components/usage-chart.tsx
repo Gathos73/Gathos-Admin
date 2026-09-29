@@ -53,8 +53,8 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
   const chartWidth = width - left - right;
   const chartHeight = height - top - bottom;
   const actualMaxValue = Math.max(0, ...available.map((point) => point.total));
-  // Use whole-request ticks and let sparse activity occupy visible chart space.
-  const tickStep = Math.max(1, Math.ceil(actualMaxValue / 4));
+  // Reserve at least 20% headroom, with evenly spaced whole-request ticks.
+  const tickStep = Math.max(1, Math.ceil((actualMaxValue * 1.2) / 4));
   const roundedMax = tickStep * 4;
   const lines = (["all", ...SERVICES] as const).map((service) => {
     const coordinates = available.map((point) => ({
@@ -71,7 +71,7 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
     return { service, coordinates, path };
   });
   const coordinates = lines[0].coordinates;
-  const ticks = end > start ? [start, start + (end - start) / 2, end] : [start];
+  const ticks = end > start ? Array.from({ length: 8 }, (_, index) => start + ((end - start) * index) / 7) : [start];
 
   return (
     <div className="usage-chart-wrap" tabIndex={0} role="group"
@@ -114,7 +114,7 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
             {path ? <path className="chart-line" data-service={service} d={path} style={{ stroke: SERVICE_COLORS[service] }} /> : null}
             {points.map((point, index) => (
               <circle className="chart-point" style={{ fill: "white", stroke: SERVICE_COLORS[service] }}
-                cx={point.x} cy={point.y} key={available[index].date} r="2.7">
+                cx={point.x} cy={point.y} key={available[index].date} r="2.0">
                 <title>{`${formatTimestamp(available[index].date)} · ${service === "all" ? "All services" : serviceLabel(service)}: ${service === "all" ? available[index].total : available[index][service]} requests`}</title>
               </circle>
             ))}
@@ -131,7 +131,7 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
         {ticks.map((timestamp, index) => (
           <text className="chart-axis-label chart-date-label" key={timestamp}
             textAnchor={index === 0 ? "start" : index === ticks.length - 1 ? "end" : "middle"}
-            x={left + (timestamp - start) / duration * chartWidth} y={height - 5}>
+            x={left + index / Math.max(1, ticks.length - 1) * chartWidth} y={height - 5}>
             {formatBucket(new Date(timestamp).toISOString(), bucketMinutes)}
           </text>
         ))}

@@ -73,3 +73,22 @@ test('window labels include both UTC and the local timezone with correct date ro
     else process.env.TZ = previous;
   }
 });
+
+
+test('axes have eight evenly spaced time labels and evenly spaced values with peak headroom', () => {
+  const html = render({ series: [point(start, 20)] });
+  const xLabels = [...html.matchAll(/class="chart-axis-label chart-date-label"[^>]*x="([^"]+)"/g)].map((match) => Number(match[1]));
+  assert.equal(xLabels.length, 8);
+  for (let index = 1; index < xLabels.length; index++) {
+    assert.ok(Math.abs((xLabels[index] - xLabels[index - 1]) - (xLabels[7] - xLabels[0]) / 7) < 1e-8);
+  }
+  const yLabels = [...html.matchAll(/class="chart-axis-label"[^>]*y="([^"]+)"[^>]*>([^<]+)<\/text>/g)];
+  const values = yLabels.map((match) => Number(match[2]));
+  assert.equal(values.length, 5);
+  assert.ok(values[0] >= 20 * 1.2);
+  assert.equal(values.at(-1), 0);
+  for (let index = 1; index < values.length; index++) {
+    assert.equal(values[index - 1] - values[index], values[0] / 4);
+    assert.equal(Number(yLabels[index][1]) - Number(yLabels[index - 1][1]), Number(yLabels[1][1]) - Number(yLabels[0][1]));
+  }
+});
