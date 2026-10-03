@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listResource } from "../lib/api";
+import { getPublicPlanOptions, listResource } from "../lib/api";
 import type { SelectOption } from "../lib/types";
 
 type Filters = { search: string; searchField: string; plan: string; product: string; createdFrom: string; createdTo: string };
@@ -23,15 +23,15 @@ export function GenerationFilters({ initial, searchFields, onApply }: {
   const [error, setError] = useState("");
   useEffect(() => {
     const controller = new AbortController();
-    async function loadOptions(resource: "plans" | "products") {
+    async function loadProducts() {
       const result: SelectOption[] = [];
       for (let page = 1; ; page++) {
-        const data = await listResource(resource, { page, pageSize: 200, orderBy: "code", descending: false }, controller.signal);
+        const data = await listResource("products", { page, pageSize: 200, orderBy: "code", descending: false }, controller.signal);
         result.push(...data.rows.map((row) => ({ value: String(row.code), label: String(row.display_name || row.name || row.code) })));
         if (!data.pagination.has_more) return result;
       }
     }
-    Promise.all([loadOptions("plans"), loadOptions("products")])
+    Promise.all([getPublicPlanOptions(), loadProducts()])
       .then(([plans, products]) => { if (!controller.signal.aborted) setOptions({ plans, products }); })
       .catch(() => { if (!controller.signal.aborted) setError("Unable to load filter options. Reload the page to try again."); });
     return () => controller.abort();
@@ -44,7 +44,7 @@ export function GenerationFilters({ initial, searchFields, onApply }: {
     <label>Search field<select value={draft.searchField} onChange={(event) => setDraft({ ...draft, searchField: event.target.value })}>{searchFields.map((field) => <option key={field.value} value={field.value}>{field.label}</option>)}</select></label>
     {(["plan", "product"] as const).map((field) => <label key={field}>{field === "plan" ? "Plan" : "Product"}<select value={draft[field]} onChange={(event) => setDraft({ ...draft, [field]: event.target.value })}>
       <option value="">{field === "plan" ? "All plans" : "All products"}</option>
-      {draft[field] && !options[`${field}s`].some((option) => option.value === draft[field]) ? <option value={draft[field]}>{draft[field]}</option> : null}
+      {field === "product" && draft[field] && !options.products.some((option) => option.value === draft[field]) ? <option value={draft[field]}>{draft[field]}</option> : null}
       {options[`${field}s`].map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
     </select></label>)}
     <label>From (local time)<input type="datetime-local" value={draft.createdFrom} max={draft.createdTo || undefined} onChange={(event) => setDraft({ ...draft, createdFrom: event.target.value })} /></label>

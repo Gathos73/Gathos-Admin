@@ -8,6 +8,7 @@ import type {
   ResourceListResponse,
   ResourceQuery,
   ResourceRecordResponse,
+  SelectOption,
 } from "./types";
 
 const BACKEND_PROXY = "/api/backend";
@@ -205,6 +206,49 @@ export function listResource(
   signal?: AbortSignal,
 ): Promise<ResourceListResponse> {
   return apiFetch<ResourceListResponse>(listPath(resource, query), { signal });
+}
+
+// Browser-document lifetime: table refreshes and mutations do not discard these options.
+let publicPlanOptions: Promise<SelectOption[]> | undefined;
+export type SubscriptionFilterOptions = Record<"status" | "plan_code" | "source", SelectOption[]>;
+let subscriptionFilterOptions: Promise<SubscriptionFilterOptions> | undefined;
+
+export function getSubscriptionFilterOptions(): Promise<SubscriptionFilterOptions> {
+  async function load(): Promise<SubscriptionFilterOptions> {
+    const options = await apiFetch<SubscriptionFilterOptions>(`${BACKEND_PROXY}/api/admin/resources/entitlements/filter-options`);
+    if (typeof window !== "undefined") publicPlanOptions ??= Promise.resolve(options.plan_code);
+    return options;
+  }
+  if (typeof window === "undefined") return load();
+  subscriptionFilterOptions ??= load().catch((error: unknown) => {
+    subscriptionFilterOptions = undefined;
+    throw error;
+  });
+  return subscriptionFilterOptions;
+}
+
+export function getPublicPlanOptions(): Promise<SelectOption[]> {
+  async function load(): Promise<SelectOption[]> {
+    const options: SelectOption[] = [];
+    for (let page = 1; ; page++) {
+      const data = await listResource("plans", {
+        page, pageSize: 200, orderBy: "display_name", descending: false,
+        filterBy: "is_public", filterValue: "true",
+      });
+      for (const row of data.rows) {
+        if (row.is_public === true && typeof row.code === "string" && typeof row.display_name === "string") {
+          options.push({ value: row.code, label: row.display_name });
+        }
+      }
+      if (!data.pagination.has_more) return options;
+    }
+  }
+  if (typeof window === "undefined") return load();
+  publicPlanOptions ??= load().catch((error: unknown) => {
+    publicPlanOptions = undefined;
+    throw error;
+  });
+  return publicPlanOptions;
 }
 
 export function getResourceRecord(

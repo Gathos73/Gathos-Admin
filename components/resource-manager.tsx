@@ -10,6 +10,9 @@ import {
   createResource,
   deleteResource,
   listResource,
+  getPublicPlanOptions,
+  getSubscriptionFilterOptions,
+  type SubscriptionFilterOptions,
 } from "../lib/api";
 import {
   cacheProducts,
@@ -22,7 +25,7 @@ import {
 } from "../lib/catalog-inline-drafts";
 
 import { getResourceConfig } from "../lib/resources";
-import type { JsonObject, ResourceKey, ResourceListResponse, ResourceRecord } from "../lib/types";
+import type { JsonObject, ResourceKey, ResourceListResponse, ResourceRecord, SelectOption } from "../lib/types";
 import { ConfirmDialog } from "./confirm-dialog";
 import { GenerationFilters } from "./generation-filters";
 import { DataTable } from "./data-table";
@@ -198,10 +201,32 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
   const total = loading ? 0 : loadState.total;
   const loadError = loading ? null : loadState.error;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [searchDraftOverride, setSearchDraft] = useState<string | null>(null);
-  const [filterDraftOverride, setFilterDraft] = useState<string | null>(null);
-  const searchDraft = searchDraftOverride ?? search;
-  const filterDraft = filterDraftOverride ?? filterValue;
+  const appliedDraft = { search, searchField, filterBy, filterValue };
+  const draftKey = JSON.stringify({ resourceKey, ...appliedDraft });
+  const [draftOverride, setDraftOverride] = useState<{ key: string; values: typeof appliedDraft } | null>(null);
+  const draft = draftOverride?.key === draftKey ? draftOverride.values : appliedDraft;
+  const updateDraft = (updates: Partial<typeof appliedDraft>) => {
+    setDraftOverride({ key: draftKey, values: { ...draft, ...updates } });
+  };
+  const [publicPlans, setPublicPlans] = useState<SelectOption[] | null>(null);
+  const [subscriptionOptions, setSubscriptionOptions] = useState<SubscriptionFilterOptions | null>(null);
+  const [planOptionsError, setPlanOptionsError] = useState("");
+  const hasPlanFilter = config.filters.some((filter) => filter.name === "plan");
+
+  useEffect(() => {
+    if ((!hasPlanFilter && resourceKey !== "entitlements") || resourceKey === "generations") return;
+    let active = true;
+    if (resourceKey === "entitlements") {
+      getSubscriptionFilterOptions()
+        .then((options) => { if (active) setSubscriptionOptions(options); })
+        .catch(() => { if (active) setPlanOptionsError("Unable to load subscription filters. Reload the page to try again."); });
+      return () => { active = false; };
+    }
+    getPublicPlanOptions()
+      .then((options) => { if (active) setPublicPlans(options); })
+      .catch(() => { if (active) setPlanOptionsError("Unable to load public plans. Reload the page to try again."); });
+    return () => { active = false; };
+  }, [hasPlanFilter, resourceKey]);
   const [drawer, setDrawer] = useState<DrawerState>({ mode: "closed" });
   const [inlineDrafts, setInlineDrafts] = useState<CatalogInlineDrafts>(
     EMPTY_CATALOG_INLINE_DRAFTS,
@@ -274,9 +299,10 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
         else next.set(key, value);
       }
       const queryString = next.toString();
-      router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false });
+      // Next updates useSearchParams for native history changes without an RSC request.
+      window.history.replaceState(null, "", queryString ? `${pathname}?${queryString}` : pathname);
     },
-    [pathname, router, searchParams],
+    [pathname, searchParams],
   );
 
   useEffect(() => {
@@ -341,18 +367,27 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
   const submitSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     replaceParameters({
-      q: searchDraft.trim() || null,
-      search_field: searchDraft.trim() ? searchField : null,
+      q: draft.search.trim() || null,
+      search_field: draft.search.trim() ? draft.searchField : null,
       page: null,
     });
-    setSearchDraft(null);
   };
 
-  const activeFilter = config.filters.find((filter) => filter.name === filterBy);
+  const activeFilter = config.filters.find((filter) => filter.name === draft.filterBy);
+  const filterOptions = resourceKey === "entitlements" && activeFilter
+    ? subscriptionOptions?.[activeFilter.name as keyof SubscriptionFilterOptions] ?? []
+    : activeFilter?.name === "plan" ? publicPlans ?? [] : activeFilter?.options;
+  const filterOptionsLoading = resourceKey === "entitlements"
+    ? subscriptionOptions === null
+    : draft.filterBy === "plan" && publicPlans === null;
   const applyFilter = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    replaceParameters({ filter_value: filterBy ? filterDraft.trim() || null : null, page: null });
-    setFilterDraft(null);
+    if (draft.filterBy && !draft.filterValue.trim()) return;
+    replaceParameters({
+      filter_by: draft.filterBy || null,
+      filter_value: draft.filterBy ? draft.filterValue.trim() : null,
+      page: null,
+    });
   };
 
   const sort = (column: string) => {
@@ -513,16 +548,16 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
             </span>
             <input
               aria-label={`Search ${config.label}`}
-              onChange={(event) => setSearchDraft(event.target.value)}
+              onChange={(event) => updateDraft({ search: event.target.value })}
               placeholder={`Search ${config.label.toLowerCase()}…`}
               type="search"
-              value={searchDraft}
+              value={draft.search}
             />
             {config.searchFields.length > 1 ? (
               <select
                 aria-label="Search field"
-                onChange={(event) => replaceParameters({ search_field: event.target.value, page: null })}
-                value={searchField}
+                onChange={(event) => updateDraft({ searchField: event.target.value })}
+                value={draft.searchField}
               >
                 {config.searchFields.map((field) => (
                   <option key={field.value} value={field.value}>
@@ -541,10 +576,9 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
               <select
                 aria-label="Filter field"
                 onChange={(event) => {
-                  setFilterDraft("");
-                  replaceParameters({ filter_by: event.target.value || null, filter_value: null, page: null });
+                  updateDraft({ filterBy: event.target.value, filterValue: "" });
                 }}
-                value={filterBy}
+                value={draft.filterBy}
               >
                 <option value="">Filter by…</option>
                 {config.filters.map((filter) => (
@@ -553,15 +587,15 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
                   </option>
                 ))}
               </select>
-              {activeFilter?.options ? (
+              {filterOptions ? (
                 <select
                   aria-label="Filter value"
-                  disabled={!filterBy}
-                  onChange={(event) => setFilterDraft(event.target.value)}
-                  value={filterDraft}
+                  disabled={!draft.filterBy || filterOptionsLoading}
+                  onChange={(event) => updateDraft({ filterValue: event.target.value })}
+                  value={draft.filterValue}
                 >
-                  <option value="">Choose…</option>
-                  {activeFilter.options.map((option) => (
+                  <option value="">{planOptionsError ? "Options unavailable" : filterOptionsLoading ? "Loading options…" : "Choose…"}</option>
+                  {filterOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -570,23 +604,24 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
               ) : (
                 <input
                   aria-label="Filter value"
-                  disabled={!filterBy}
-                  onChange={(event) => setFilterDraft(event.target.value)}
+                  disabled={!draft.filterBy}
+                  onChange={(event) => updateDraft({ filterValue: event.target.value })}
                   placeholder="Exact value"
-                  value={filterDraft}
+                  value={draft.filterValue}
                 />
               )}
-              <button className="button button--secondary" disabled={!filterBy} type="submit">
+              <button className="button button--secondary" disabled={draft.filterBy ? !draft.filterValue.trim() : !filterBy} type="submit">
                 Apply
               </button>
+              {(resourceKey === "entitlements" || draft.filterBy === "plan") && planOptionsError ? <span role="alert">{planOptionsError}</span> : null}
             </form>
           ) : null}
 
-          {search || filterBy ? (
+          {draft.search || draft.filterBy || search || filterBy ? (
             <button
               className="button button--ghost"
               onClick={() =>
-                replaceParameters({ q: null, search_field: null, filter_by: null, filter_value: null, page: null })
+                updateDraft({ search: "", searchField: config.searchFields[0]?.value ?? "", filterBy: "", filterValue: "" })
               }
               type="button"
             >

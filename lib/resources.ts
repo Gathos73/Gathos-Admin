@@ -39,7 +39,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
     listDisplay: [
       { name: "email", label: "Email", sortable: true },
       { name: "name", label: "Name", sortable: true },
-      { name: "plan", label: "Plan", kind: "status", sortable: true },
+      { name: "plan", label: "Plan", sortable: true, display: { primaryPath: "plan_name" } },
       { name: "is_superuser", label: "Superuser", kind: "boolean", sortable: true },
       { name: "is_suspended", label: "Suspended", kind: "boolean", sortable: true },
       { name: "is_comped", label: "Comped", kind: "boolean", sortable: true },
@@ -110,7 +110,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
       { label: "WorkOS ID", value: "workos_id" },
     ],
     filters: [
-      { name: "plan", label: "Plan", options: PLAN_OPTIONS },
+      { name: "plan", label: "Plan", options: [] },
       {
         name: "is_suspended",
         label: "Suspended",
@@ -473,7 +473,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
     ],
     filters: [
       { name: "type", label: "Type", options: GENERATION_TYPE_OPTIONS },
-      { name: "plan", label: "Plan", options: PLAN_OPTIONS },
+      { name: "plan", label: "Plan", options: [] },
     ],
     mutations: { basePath: "/generations" },
     canCreate: true,

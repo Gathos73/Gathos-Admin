@@ -9,6 +9,67 @@ const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.Modu
   .replaceAll('"./request-cache"', JSON.stringify(new URL('../lib/request-cache.ts', import.meta.url).href));
 const api = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 
+test('subscription filter options share one request and seed the public plan cache', async (t) => {
+  globalThis.window = {};
+  t.after(() => { delete globalThis.window; clearRequestCache(); });
+  const isolated = await import(`data:text/javascript;base64,${Buffer.from(compiled + '\n// subscription options document').toString('base64')}`);
+  const options = {
+    status: [{ value: 'on_hold', label: 'On hold' }],
+    plan_code: [{ value: 'team_v2', label: 'Team Access' }],
+    source: [{ value: 'complimentary', label: 'Complimentary' }],
+  };
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async (path) => {
+    assert.equal(path, '/api/backend/api/admin/resources/entitlements/filter-options');
+    calls++;
+    return Response.json(options);
+  });
+  assert.deepEqual(await Promise.all([
+    isolated.getSubscriptionFilterOptions(), isolated.getSubscriptionFilterOptions(),
+  ]), [options, options]);
+  clearRequestCache();
+  assert.deepEqual(await isolated.getSubscriptionFilterOptions(), options);
+  assert.deepEqual(await isolated.getPublicPlanOptions(), options.plan_code);
+  assert.equal(calls, 1);
+});
+
+test('public plan options paginate, deduplicate, and survive cache clears until a document reload', async (t) => {
+  globalThis.window = {};
+  t.after(() => { delete globalThis.window; clearRequestCache(); });
+  let calls = 0;
+  let now = 1000;
+  t.mock.method(Date, 'now', () => now);
+  t.mock.method(globalThis, 'fetch', async (path) => {
+    calls++;
+    const params = new URL(path, 'http://localhost').searchParams;
+    assert.equal(params.get('filter_by'), 'is_public');
+    assert.equal(params.get('filter_value'), 'true');
+    const page = Number(params.get('page'));
+    return Response.json({
+      rows: page === 1 ? [
+        { code: 'public_one', display_name: 'Team Access', is_public: true },
+        { code: 'private_one', display_name: 'Private Access', is_public: false },
+      ] : [{ code: 'public_two', display_name: 'Creator Studio', is_public: true }],
+      pagination: { has_more: page === 1 },
+    });
+  });
+  const expected = [
+    { value: 'public_one', label: 'Team Access' },
+    { value: 'public_two', label: 'Creator Studio' },
+  ];
+  const results = await Promise.all([api.getPublicPlanOptions(), api.getPublicPlanOptions()]);
+  assert.deepEqual(results, [expected, expected]);
+  assert.equal(calls, 2);
+  clearRequestCache();
+  now += 24 * 60 * 60 * 1000;
+  assert.deepEqual(await api.getPublicPlanOptions(), expected);
+  assert.equal(calls, 2);
+  // A fresh module represents the memory reset on a full document reload.
+  const reloaded = await import(`data:text/javascript;base64,${Buffer.from(compiled + '\n// reloaded document').toString('base64')}`);
+  assert.deepEqual(await reloaded.getPublicPlanOptions(), expected);
+  assert.equal(calls, 4);
+});
+
 test('API reads cache across navigation and mutations invalidate them', async (t) => {
   globalThis.window = {};
   t.after(() => { delete globalThis.window; clearRequestCache(); });
