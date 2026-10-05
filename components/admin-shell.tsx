@@ -68,7 +68,7 @@ const NAV_ITEMS: NavItem[] = [
   // { href: "/product-routes", label: "Product routes", description: "Manage product routes", icon: TierIcon, keywords: "catalog product_routes", hideFromSidebar: true },
   { href: "/plans", label: "Plans", description: "Manage plans", icon: TierIcon, keywords: "catalog plans" },
   { href: "/subscriptions", label: "Subscriptions", description: "User subscriptions, billing periods, and access history", icon: TierIcon, keywords: "entitlements subscriptions renewal billing dates" },
-  // { href: "/plan-limits", label: "Plan limits", description: "Manage plan limits", icon: TierIcon, keywords: "catalog plan_limits" },
+  // { href: "/plan-products", label: "Plan limits", description: "Manage plan limits", icon: TierIcon, keywords: "catalog plan_products" },
   {
     description: "Accounts and access",
     href: "/users",

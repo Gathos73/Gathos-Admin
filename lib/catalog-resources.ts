@@ -5,7 +5,7 @@ const code: ResourceField = { name: "code", label: "Code", kind: "text", require
 const productSelection: ResourceField = { name: "product_ids", label: "Products", kind: "relations", referenceResource: "products", defaultValue: [], help: "Select the products included in this group." };
 const base = { primaryKey: "id", defaultOrder: "created_at", defaultDescending: true, canCreate: true, canEdit: true, canDelete: true, canBulkDelete: false };
 
-export const CATALOG_CONFIGS: Record<"products" | "plans" | "plan_limits" | "product_routes", ResourceConfig> = {
+export const CATALOG_CONFIGS: Record<"products" | "plans" | "plan_products" | "product_routes", ResourceConfig> = {
   products: {
     ...base, key: "products", label: "Products", labelSingular: "product",
     description: "Generation capabilities and their input/output contracts. Used contracts are protected; deleting retires a product.",
@@ -54,18 +54,18 @@ export const CATALOG_CONFIGS: Record<"products" | "plans" | "plan_limits" | "pro
       { name: "plan_concurrency_limit", label: "Plan concurrency limit", kind: "number", placeholder: "e.g. 5 (blank: unlimited)", nullable: true, min: 1, help: "Max concurrent active accepted generations across all products. Leave blank for unlimited." }],
     searchFields: [{ label: "Code", value: "code" }, { label: "Name", value: "display_name" }], filters: [{ name: "is_public", label: "Public", options: [{ label: "Public", value: "true" }, { label: "Private", value: "false" }] }], mutations: { basePath: "/catalog/plans" },
   },
-  plan_limits: {
-    ...base, key: "plan_limits", label: "Plan limits", labelSingular: "plan limit", canCreate: false,
-    description: "Per-product generation allowances. Each product in a plan can have a fixed-window, queue-depth, and concurrency limit. Zero denies all; blank means unlimited.",
+  plan_products: {
+    ...base, key: "plan_products", label: "Plan products", labelSingular: "plan product", canCreate: false, canDelete: false,
+    description: "Products included in a plan and their generation allowances. Blank limits mean unlimited; overall plan limits still apply.",
     listDisplay: [{ name: "product_name", label: "Product" }, { name: "plan_name", label: "Plan" }, { name: "fixed_window_limit", label: "Fixed window", kind: "number" }, { name: "queue_depth_limit", label: "Queue depth", kind: "number" }, { name: "concurrency_limit", label: "Concurrency", kind: "number" }],
     fields: [
       { name: "plan_id", label: "Plan", kind: "relation", referenceResource: "plans", required: true, immutableOnEdit: true },
       { name: "product_id", label: "Product", kind: "relation", referenceResource: "products", required: true, immutableOnEdit: true, help: "Must be one of the plan's granted products." },
       { name: "fixed_window_limit", label: "Fixed-window limit", kind: "number", nullable: true, min: 0, help: "Max accepted generations within the shared UTC quota window. Leave blank for unlimited." },
       { name: "queue_depth_limit", label: "Queue depth limit", kind: "number", nullable: true, min: 0, help: "Max queued (not yet accepted) generations for this product. Leave blank for unlimited." },
-      { name: "concurrency_limit", label: "Concurrency limit", kind: "number", nullable: true, min: 1, help: "Max accepted active generations running at the same time for this product. Leave blank for unlimited." },
+      { name: "concurrency_limit", label: "Concurrency limit", kind: "number", nullable: true, min: 0, help: "Max accepted active generations running at the same time for this product. Leave blank for unlimited." },
     ],
 
-    searchFields: [{ label: "Product", value: "product_name" }], filters: [{ name: "plan_id", label: "Plan ID" }], mutations: { basePath: "/catalog/plan_limits" },
+    searchFields: [{ label: "Product", value: "product_name" }], filters: [{ name: "plan_id", label: "Plan ID" }], mutations: { basePath: "/catalog/plan_products" },
   },
 };

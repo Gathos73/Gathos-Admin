@@ -585,7 +585,7 @@ export const RESOURCE_SLUGS: Record<string, ResourceKey> = {
   "product-routes": "product_routes",
   plans: "plans",
   subscriptions: "entitlements",
-  "plan-limits": "plan_limits",
+  "plan-products": "plan_products",
   users: "users",
   "api-keys": "api_keys",
   "security-blocklist": "security_blocklist",

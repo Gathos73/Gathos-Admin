@@ -10,7 +10,7 @@ export type ResourceKey =
   | "product_routes"
   | "plans"
   | "entitlements"
-  | "plan_limits"
+  | "plan_products"
   | "users"
   | "api_keys"
   | "security_blocklist"

@@ -54,9 +54,9 @@ export function selectedItemsFromRecord(record: ResourceRecord | undefined, valu
   const known = new Map<string, ReadOnlyItem>();
   if (Array.isArray(record?.plan_products)) {
     for (const item of record.plan_products) {
-      const row = item as { id?: unknown; name?: unknown; code?: unknown };
-      const id = String(row.id);
-      known.set(id, { id, name: String(row.name || row.code || id), code: row.code ? String(row.code) : undefined });
+      const row = item as { product_id?: unknown; product_name?: unknown; product_code?: unknown };
+      const id = String(row.product_id);
+      known.set(id, { id, name: String(row.product_name || row.product_code || id), code: row.product_code ? String(row.product_code) : undefined });
     }
   }
   return ids.map((id) => known.get(id) ?? { id, name: id });

@@ -1,7 +1,7 @@
 import type { ResourceConfig, ResourceField, ResourceRecord } from "./types";
 
 // Rendered by dedicated inline sections (limits, routes) or used only for labels.
-const INLINE_KEYS = new Set(["plan_limits", "plan_products", "product_routes"]);
+const INLINE_KEYS = new Set(["plan_products", "product_routes"]);
 // Shown in the record summary at the top of the page.
 const SUMMARY_KEYS = ["id", "created_at", "updated_at"];
 

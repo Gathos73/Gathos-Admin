@@ -426,7 +426,7 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
         pushToast(result.error, "error");
         return;
       }
-      createPayload.plan_limits = result.rows ?? [];
+      createPayload.plan_products = result.rows ?? [];
     } else if (resourceKey === "products") {
       const result = serializeProductRouteDrafts(inlineDrafts.productRoutes);
       if (result.error) {

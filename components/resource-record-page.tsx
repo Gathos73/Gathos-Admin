@@ -78,9 +78,7 @@ function objectRows(value: unknown): ResourceRecord[] {
 
 function primaryRecordFields(resourceKey: ResourceKey, record: ResourceRecord): ResourceRecord {
   const fields = { ...record };
-  if (resourceKey === "plans") {
-    delete fields.plan_limits;
-  } else if (resourceKey === "products") {
+  if (resourceKey === "products") {
     delete fields.product_routes;
   } else if (resourceKey === "api_keys") {
     // Shown in the user section below the form.
@@ -171,27 +169,24 @@ export function ResourceRecordPage({
         const row = response.row;
         if (row) {
           if (Array.isArray(row.plan_products)) {
-            cacheProducts(row.plan_products as Array<{ id?: unknown; code?: unknown; name?: unknown }>);
-          }
-          if (Array.isArray(row.plan_limits)) {
             cacheProducts(
-              (row.plan_limits as Array<{ product_id?: unknown; product_name?: unknown; product_code?: unknown }>)
+              (row.plan_products as Array<{ product_id?: unknown; product_name?: unknown; product_code?: unknown }>)
                 .filter((l) => l.product_id)
                 .map((l) => ({ id: l.product_id, name: l.product_name, code: l.product_code })),
             );
           }
-          if (resourceKey === "plan_limits" && row.product_id) {
+          if (resourceKey === "plan_products" && row.product_id) {
             cacheProducts([{ id: row.product_id, name: row.product_name, code: row.product_code }]);
           }
           if (resourceKey === "plans") {
-            const rawLimits = objectRows(row.plan_limits);
+            const rawLimits = objectRows(row.plan_products);
             const rawProducts = Array.isArray(row.plan_products)
-              ? (row.plan_products as Array<{ id: unknown; code?: unknown; name?: unknown }>)
+              ? (row.plan_products as Array<{ product_id: unknown; product_code?: unknown; product_name?: unknown }>)
               : [];
             const productList = rawProducts.map((p) => ({
-              id: String(p.id),
-              code: String(p.code ?? ""),
-              name: String(p.name ?? ""),
+              id: String(p.product_id),
+              code: String(p.product_code ?? ""),
+              name: String(p.product_name ?? ""),
             }));
             setPlanProducts(productList);
 
@@ -277,7 +272,7 @@ export function ResourceRecordPage({
         setSubmitting(false);
         return;
       }
-      updatePayload.plan_limits = result.rows ?? [];
+      updatePayload.plan_products = result.rows ?? [];
       updatePayload.product_ids = productIds;
     }
 
@@ -498,7 +493,7 @@ export function ResourceRecordPage({
 
       {resourceKey === "plans" && record && mode === "view" ? (
         <PlanLimitsInline
-          limits={objectRows(record.plan_limits)}
+          limits={objectRows(record.plan_products)}
           mode={mode}
           onChanged={handleInlineChanged}
           planId={recordId}

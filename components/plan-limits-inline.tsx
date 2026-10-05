@@ -5,7 +5,6 @@ import { type FormEvent, useState } from "react";
 
 import {
   ApiError,
-  deleteResource,
   updateResource,
 } from "@/lib/api";
 import {
@@ -19,10 +18,10 @@ import type { JsonObject, JsonValue, ResourceRecord } from "@/lib/types";
 
 type InlineMode = "view" | "edit";
 
-const PLAN_LIMIT_CONFIG = getResourceConfig("plan_limits");
+const PLAN_LIMIT_CONFIG = getResourceConfig("plan_products");
 
 function displayValue(value: JsonValue | undefined): string {
-  if (value === undefined || value === null || value === "") return "—";
+  if (value === undefined || value === null || value === "") return "Unlimited";
   return Number(value).toLocaleString();
 }
 
@@ -51,7 +50,7 @@ function ProductLimitFields({
   draft,
   onChange,
   showDelete = false,
-  concurrencyMinimum = 1,
+  concurrencyMinimum = 0,
 }: {
   draft: ProductLimitDraft;
   onChange: (draft: ProductLimitDraft) => void;
@@ -113,9 +112,9 @@ function ProductLimitFields({
       </label>
       {showDelete ? (
         <label className="plan-limit-delete-field">
-          <span>Delete?</span>
+          <span>Reset limits?</span>
           <input
-            aria-label={`Delete limit for ${draft.productName || draft.productCode}`}
+            aria-label={`Reset limits for ${draft.productName || draft.productCode}`}
             checked={draft.deleteRequested}
             onChange={(e) => change({ deleteRequested: e.target.checked })}
             type="checkbox"
@@ -149,8 +148,8 @@ function InlineLimitForm({
     if (draft.deleteRequested) {
       setSubmitting(true);
       try {
-        await deleteResource(PLAN_LIMIT_CONFIG, id);
-        onChanged(`Product limit for "${draft.productName || draft.productCode}" deleted.`);
+        await updateResource(PLAN_LIMIT_CONFIG, id, { fixed_window_limit: null, queue_depth_limit: null, concurrency_limit: null });
+        onChanged(`Product limit for "${draft.productName || draft.productCode}" reset to unlimited.`);
       } catch (cause) {
         setError(requestError(cause));
       } finally {
@@ -196,7 +195,7 @@ function InlineLimitForm({
           disabled={submitting}
           type="submit"
         >
-          {submitting ? "Saving…" : draft.deleteRequested ? "Delete limit" : "Save limit"}
+          {submitting ? "Saving…" : draft.deleteRequested ? "Reset limits" : "Save limit"}
         </button>
       </div>
     </form>
@@ -210,7 +209,7 @@ export function PlanLimitsCreateInline({
   error,
   onChange,
   submitting,
-  concurrencyMinimum = 1,
+  concurrencyMinimum = 0,
 }: {
   allowedProducts: { id: string; code: string; name: string }[];
   drafts: ProductLimitDraft[];
@@ -352,7 +351,7 @@ export function PlanLimitsInline({
                           {mode === "edit" ? (
                             <button className="button button--ghost button--small" onClick={() => setEditingId(id)} type="button">Edit</button>
                           ) : (
-                            <Link href={`/plan-limits/${encodeURIComponent(id)}`}>View</Link>
+                            <Link href={`/plan-products/${encodeURIComponent(id)}`}>View</Link>
                           )}
                         </td>
                       </>
@@ -365,8 +364,8 @@ export function PlanLimitsInline({
         </div>
       ) : (
         <div className="plan-limits-empty">
-          <strong>No product limits</strong>
-          <span>This plan has no per-product limits. Add one to restrict usage by product.</span>
+          <strong>No products included</strong>
+          <span>Select products on the plan to configure their limits.</span>
         </div>
       )}
     </section>
