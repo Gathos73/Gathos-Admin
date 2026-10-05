@@ -1,4 +1,4 @@
-export type ServiceType = "image" | "image_to_image" | "tts" | "video" | "music";
+export type ServiceType = "image" | "image_to_image" | "tts" | "video" | "music" | "stt";
 export type ComputeState = "enabled" | "draining" | "disabled" | "retired";
 
 export const SERVICE_TYPES: Record<ServiceType, { label: string; adapter: string; pool: string }> = {
@@ -6,6 +6,7 @@ export const SERVICE_TYPES: Record<ServiceType, { label: string; adapter: string
   image_to_image: { label: "Image to image", adapter: "klein_generate_v1", pool: "i2i:api-v1" },
   tts: { label: "Text to speech", adapter: "tts_jobs_v1", pool: "tts:api-v1" },
   video: { label: "Video", adapter: "ltx_jobs_v1", pool: "ltx23:fp8:api-v1" },
+  stt: { label: "Speech to Text", adapter: "parakeet_stt_jobs_v1", pool: "stt:parakeet-v2" },
   music: { label: "Music", adapter: "music_jobs_v1", pool: "music:api-v1" },
 };
 
