@@ -208,6 +208,26 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
   const updateDraft = (updates: Partial<typeof appliedDraft>) => {
     setDraftOverride({ key: draftKey, values: { ...draft, ...updates } });
   };
+  const [productOptions, setProductOptions] = useState<SelectOption[] | null>(null);
+  const [productOptionsError, setProductOptionsError] = useState("");
+  const hasProductFilter = config.filters.some((filter) => filter.referenceResource === "products");
+  useEffect(() => {
+    if (!hasProductFilter) return;
+    const controller = new AbortController();
+    async function load() {
+      const options: SelectOption[] = [];
+      for (let page = 1; ; page++) {
+        const response = await listResource("products", { page, pageSize: 200, orderBy: "code", descending: false }, controller.signal);
+        for (const row of response.rows) {
+          if (!options.some((option) => option.value === row.code)) options.push({ value: String(row.code), label: String(row.name || row.code) });
+        }
+        if (!response.pagination.has_more) break;
+      }
+      if (!controller.signal.aborted) setProductOptions(options);
+    }
+    void load().catch(() => { if (!controller.signal.aborted) setProductOptionsError("Unable to load products. Reload the page to try again."); });
+    return () => controller.abort();
+  }, [hasProductFilter]);
   const [publicPlans, setPublicPlans] = useState<SelectOption[] | null>(null);
   const [subscriptionOptions, setSubscriptionOptions] = useState<SubscriptionFilterOptions | null>(null);
   const [planOptionsError, setPlanOptionsError] = useState("");
@@ -376,10 +396,10 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
   const activeFilter = config.filters.find((filter) => filter.name === draft.filterBy);
   const filterOptions = resourceKey === "entitlements" && activeFilter
     ? subscriptionOptions?.[activeFilter.name as keyof SubscriptionFilterOptions] ?? []
-    : activeFilter?.name === "plan" ? publicPlans ?? [] : activeFilter?.options;
+    : activeFilter?.referenceResource === "products" ? productOptions ?? [] : activeFilter?.name === "plan" ? publicPlans ?? [] : activeFilter?.options;
   const filterOptionsLoading = resourceKey === "entitlements"
     ? subscriptionOptions === null
-    : draft.filterBy === "plan" && publicPlans === null;
+    : activeFilter?.referenceResource === "products" ? productOptions === null : draft.filterBy === "plan" && publicPlans === null;
   const applyFilter = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (draft.filterBy && !draft.filterValue.trim()) return;
@@ -594,7 +614,7 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
                   onChange={(event) => updateDraft({ filterValue: event.target.value })}
                   value={draft.filterValue}
                 >
-                  <option value="">{planOptionsError ? "Options unavailable" : filterOptionsLoading ? "Loading options…" : "Choose…"}</option>
+                  <option value="">{planOptionsError || productOptionsError ? "Options unavailable" : filterOptionsLoading ? "Loading options…" : "Choose…"}</option>
                   {filterOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -613,6 +633,7 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
               <button className="button button--secondary" disabled={draft.filterBy ? !draft.filterValue.trim() : !filterBy} type="submit">
                 Apply
               </button>
+              {activeFilter?.referenceResource === "products" && productOptionsError ? <span role="alert">{productOptionsError}</span> : null}
               {(resourceKey === "entitlements" || draft.filterBy === "plan") && planOptionsError ? <span role="alert">{planOptionsError}</span> : null}
             </form>
           ) : null}

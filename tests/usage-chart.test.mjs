@@ -10,7 +10,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 // Compile the standalone TSX component so the tests exercise the rendered SVG.
 const source = readFileSync(new URL('../components/usage-chart.tsx', import.meta.url), 'utf8');
 const { outputText } = ts.transpileModule(source, {
-  compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS },
+  compilerOptions: { target: ts.ScriptTarget.ES2017, jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS },
 });
 const exports = {};
 vm.runInNewContext(outputText, { exports, require: createRequire(import.meta.url), Intl, Date });
@@ -91,4 +91,14 @@ test('axes have eight evenly spaced time labels and evenly spaced values with pe
     assert.equal(values[index - 1] - values[index], values[0] / 4);
     assert.equal(Number(yLabels[index][1]) - Number(yLabels[index - 1][1]), Number(yLabels[1][1]) - Number(yLabels[0][1]));
   }
+});
+
+
+test('catalog-defined products appear in admin usage charts', () => {
+  const html = render({ products: [{ code: 'stt', name: 'Speech to Text' }, { code: 'future', name: 'Future product' }],
+    series: [{ date: start, total: 5, stt: 3, future: 2 }] });
+  assert.match(html, /data-service="stt"/);
+  assert.match(html, /data-service="future"/);
+  assert.match(html, /Speech to Text: 3 requests/);
+  assert.match(html, /Future product: 2 requests/);
 });

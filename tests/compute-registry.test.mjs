@@ -25,15 +25,15 @@ test('editing and adding a service retain every saved service identity and strip
   const draft = gpuDraft(source);
   draft.services.push({ ...newService('new-service', 'tts'), model_id: 'new-tts', model_revision: 'v2', pool_key: 'tts:second-model', base_url: 'https://gpu.test/new-tts/' });
   const body = await prepareGpuWrite(draft, async (value) => value.mode === 'existing' ? value.reference : null);
-  assert.equal(body.services.length, 6);
-  assert.deepEqual(body.services.slice(0, 5).map((service) => service.service_id), source.services.map((service) => service.service_id));
+  assert.equal(body.services.length, source.services.length + 1);
+  assert.deepEqual(body.services.slice(0, source.services.length).map((service) => service.service_id), source.services.map((service) => service.service_id));
   assert.equal(body.services[1].desired_state, 'retired');
-  assert.equal(body.services[5].base_url, 'https://gpu.test/new-tts');
-  assert.equal(body.services[5].adapter, 'tts_jobs_v1');
+  assert.equal(body.services[source.services.length].base_url, 'https://gpu.test/new-tts');
+  assert.equal(body.services[source.services.length].adapter, 'tts_jobs_v1');
   for (const service of body.services) {
     for (const key of ['version', 'gpu', 'gpu_revision', 'draftId', 'credential']) assert.equal(key in service, false);
   }
-  assert.equal('service_id' in body.services[5], false);
+  assert.equal('service_id' in body.services[source.services.length], false);
   assert.equal(body.collector.credential_ref, credentialId);
 });
 

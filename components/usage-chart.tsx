@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 
-export type UsagePoint = {
-  date: string; total: number; image: number; image2image: number; tts: number; video: number;
-};
-export const SERVICES = ["image", "image2image", "tts", "video"] as const;
-export const SERVICE_COLORS = { all: "#02492a", image: "#0284c7", image2image: "#d97706", tts: "#059669", video: "#7c3aed" };
+export type UsagePoint = { date: string; total: number; [key: string]: string | number };
+export const SERVICE_COLORS: Record<string, string> = { all: "#02492a", image: "#0284c7", image2image: "#d97706", tts: "#059669", video: "#7c3aed" };
+export function serviceColor(code: string): string {
+  return SERVICE_COLORS[code] ?? ["#db2777", "#0891b2", "#6366f1"][Array.from(code).reduce((sum, c) => sum + c.charCodeAt(0), 0) % 3];
+}
 const numberFormatter = new Intl.NumberFormat("en-US");
 const compactFormatter = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 
@@ -21,11 +21,8 @@ function formatBucket(value: string, minutes: number): string {
     hour: "numeric", minute: "2-digit",
   }).format(new Date(value));
 }
-export function serviceLabel(value?: string): string {
-  if (value === "tts") return "Text to speech";
-  if (value === "video") return "Video";
-  if (value === "image2image") return "Image to image";
-  return "Text to image";
+export function serviceLabel(value?: string, products: Array<{ code: string; name: string }> = []): string {
+  return products.find((product) => product.code === value)?.name ?? value ?? "Unknown product";
 }
 export function UsageWindow({ start, end }: { start: string; end: string }) {
   return <div className="usage-window">
@@ -34,9 +31,10 @@ export function UsageWindow({ start, end }: { start: string; end: string }) {
   </div>;
 }
 
-export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, periodEnd }: {
-  series: UsagePoint[]; bucketMinutes: number; sampledAt: string; periodStart: string; periodEnd: string;
+export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, periodEnd, products = [] }: {
+  products?: Array<{ code: string; name: string }>; series: UsagePoint[]; bucketMinutes: number; sampledAt: string; periodStart: string; periodEnd: string;
 }) {
+  const SERVICES = [...new Set([...products.map((product) => product.code), ...series.flatMap((point) => Object.keys(point).filter((key) => key !== "date" && key !== "total"))])];
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const available = series.filter((point) => new Date(point.date).getTime() <= new Date(sampledAt).getTime());
   const start = new Date(periodStart).getTime();
@@ -59,7 +57,7 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
   const lines = (["all", ...SERVICES] as const).map((service) => {
     const coordinates = available.map((point) => ({
       x: left + ((new Date(point.date).getTime() - start) / duration) * chartWidth,
-      y: top + chartHeight - ((service === "all" ? point.total : point[service]) / roundedMax) * chartHeight,
+      y: top + chartHeight - ((service === "all" ? point.total : Number(point[service] ?? 0)) / roundedMax) * chartHeight,
     }));
     // Horizontal control points preserve the original smooth curve without overshoot.
     const path = coordinates.map((point, index) => {
@@ -110,12 +108,12 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
           );
         })}
         {lines.map(({ service, coordinates: points, path }) => (
-          <g key={service} aria-label={service === "all" ? "All services combined" : serviceLabel(service)}>
-            {path ? <path className="chart-line" data-service={service} d={path} style={{ stroke: SERVICE_COLORS[service] }} /> : null}
+          <g key={service} aria-label={service === "all" ? "All services combined" : serviceLabel(service, products)}>
+            {path ? <path className="chart-line" data-service={service} d={path} style={{ stroke: serviceColor(service) }} /> : null}
             {points.map((point, index) => (
-              <circle className="chart-point" style={{ fill: "white", stroke: SERVICE_COLORS[service] }}
+              <circle className="chart-point" style={{ fill: "white", stroke: serviceColor(service) }}
                 cx={point.x} cy={point.y} key={available[index].date} r="2.0">
-                <title>{`${formatTimestamp(available[index].date)} · ${service === "all" ? "All services" : serviceLabel(service)}: ${service === "all" ? available[index].total : available[index][service]} requests`}</title>
+                <title>{`${formatTimestamp(available[index].date)} · ${service === "all" ? "All services" : serviceLabel(service, products)}: ${service === "all" ? available[index].total : available[index][service]} requests`}</title>
               </circle>
             ))}
           </g>
@@ -124,7 +122,7 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
           <g aria-hidden="true">
             <line className="chart-crosshair" x1={coordinates[activeIndex].x} x2={coordinates[activeIndex].x} y1={top} y2={top + chartHeight} />
             {lines.map(({ service, coordinates: points }) => (
-              <circle key={service} className="chart-active-point" style={{ stroke: SERVICE_COLORS[service] }} cx={points[activeIndex].x} cy={points[activeIndex].y} r="5" />
+              <circle key={service} className="chart-active-point" style={{ stroke: serviceColor(service) }} cx={points[activeIndex].x} cy={points[activeIndex].y} r="5" />
             ))}
           </g>
         ) : null}
@@ -144,7 +142,7 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
           </div>
           <p className="analytics-period">All services in this interval</p>
           <div className="chart-inspector-services">
-            {SERVICES.map((type) => <span key={type}><i className={`legend-dot legend-dot--${type}`} style={{ background: SERVICE_COLORS[type] }} />{serviceLabel(type)} <strong>{numberFormatter.format(active[type])}</strong></span>)}
+            {SERVICES.map((type) => <span key={type}><i className={`legend-dot legend-dot--${type}`} style={{ background: serviceColor(type) }} />{serviceLabel(type, products)} <strong>{numberFormatter.format(Number(active[type] ?? 0))}</strong></span>)}
           </div>
         </div>
       ) : !available.length ? <p className="empty-row">No intervals available yet.</p> : null}

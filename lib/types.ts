@@ -98,6 +98,7 @@ export interface ResourceColumn {
 }
 
 export interface ResourceFilter {
+  referenceResource?: ResourceKey;
   name: string;
   label: string;
   options?: SelectOption[];

@@ -3,10 +3,9 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { GpuIcon, RefreshIcon } from "@/components/icons";
-import { getGpuHealth, getGpuHistory, type GpuHealthSnapshot, type GpuHistory, type GpuReading, type MonitoredGpu } from "@/lib/api";
+import { getGpuHealth, getGpuHistory, getOverviewProducts, type GpuHealthSnapshot, type GpuHistory, type GpuReading, type MonitoredGpu } from "@/lib/api";
 
 const LABELS: Record<GpuReading["health"], string> = { healthy: "Healthy telemetry", degraded: "Partial telemetry", stale: "Stale readings", unavailable: "Collector unavailable", identity_mismatch: "Identity mismatch" };
-const PRODUCT_NAMES: Record<string, string> = { image: "Image", image_to_image: "Image to image", tts: "Text to speech", video: "Video", music: "Music" };
 const RANGES = [{ label: "15 minutes", minutes: 15 }, { label: "1 hour", minutes: 60 }, { label: "24 hours", minutes: 1440 }, { label: "7 days", minutes: 10080 }];
 const time = (value: string | null) => value ? new Date(value).toLocaleString() : "No sample";
 const measurement = (value: number | null | undefined, unit = "") => value == null ? "—" : `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${unit}`;
@@ -93,6 +92,15 @@ function History({ gpu }: { gpu: MonitoredGpu }) {
 }
 
 export function GpuHealthDashboard() {
+  const [productNames, setProductNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const controller = new AbortController();
+    getOverviewProducts(controller.signal).then((response) => {
+      if (!controller.signal.aborted) setProductNames(Object.fromEntries(response.products.map((product) => [product.code, product.name])));
+    }).catch(() => {});
+    return () => controller.abort();
+  }, []);
+
   const [snapshot, setSnapshot] = useState<GpuHealthSnapshot | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -131,7 +139,7 @@ export function GpuHealthDashboard() {
       {!snapshot.total ? <div className="gpu-empty-state"><GpuIcon /><h2>No GPUs registered</h2><p>Add a GPU with its collector to start monitoring.</p><Link className="button button--primary" href="/gpus/new">Add GPU</Link></div> : <>
         <section className="gpu-panel"><div className="compute-section-heading"><h2>GPU inventory</h2><span>Last successful refresh: {time(snapshot.observed_at)}</span></div>
           <div className="compute-table-wrap"><table className="compute-table monitor-table"><thead><tr><th>GPU</th><th>Collector</th><th>Products</th><th>Configuration</th><th>Reservation</th><th>CPU</th><th>RAM</th></tr></thead><tbody>{snapshot.items.map((g) => <tr key={g.gpu_id} aria-selected={selected?.gpu_id === g.gpu_id}>
-            <td><button className="monitor-select" type="button" onClick={() => setSelectedId(g.gpu_id)} aria-pressed={selected?.gpu_id === g.gpu_id}>{g.name}</button><small>{g.gpu_model || g.server_id}</small></td><td><span className={`monitor-state monitor-state--${error ? "stale" : g.health}`}>{error ? "Last reading" : LABELS[g.health]}</span></td><td>{g.services.map((s) => PRODUCT_NAMES[s.service_type] ?? s.service_type).join(", ") || "No services"}</td><td>{g.desired_state}</td><td>{g.reservation_state || "Unreserved"}</td><td>{measurement(g.metrics?.cpu_percent, "%")}</td><td>{measurement(g.metrics?.memory.used_percent, "%")}</td>
+            <td><button className="monitor-select" type="button" onClick={() => setSelectedId(g.gpu_id)} aria-pressed={selected?.gpu_id === g.gpu_id}>{g.name}</button><small>{g.gpu_model || g.server_id}</small></td><td><span className={`monitor-state monitor-state--${error ? "stale" : g.health}`}>{error ? "Last reading" : LABELS[g.health]}</span></td><td>{g.services.map((s) => productNames[s.service_type === "image_to_image" ? "image2image" : s.service_type] ?? s.service_type).join(", ") || "No services"}</td><td>{g.desired_state}</td><td>{g.reservation_state || "Unreserved"}</td><td>{measurement(g.metrics?.cpu_percent, "%")}</td><td>{measurement(g.metrics?.memory.used_percent, "%")}</td>
           </tr>)}</tbody></table></div>
           {(back.length > 0 || snapshot.next_after_id) && <div className="compute-pagination"><button type="button" className="button button--secondary" disabled={!back.length || loading} onClick={() => { navigate(back.at(-1)); setBack((v) => v.slice(0, -1)); }}>Previous</button><span>Page {back.length + 1}</span><button type="button" className="button button--secondary" disabled={!snapshot.next_after_id || loading} onClick={() => { setBack((v) => [...v, cursor]); navigate(snapshot.next_after_id!); }}>Next</button></div>}
         </section>
@@ -144,7 +152,7 @@ export function GpuHealthDashboard() {
             {!metrics.devices.length && <p className="compute-notice">GPU device telemetry is unavailable. System resource measurements are shown where available.</p>}
             <div className="gpu-panel"><h3>System resources</h3><dl className="gpu-detail-list"><div><dt>Uptime</dt><dd>{measurement(metrics.uptime_seconds == null ? null : metrics.uptime_seconds / 3600, " hours")}</dd></div><div><dt>Swap</dt><dd>{bytes(metrics.swap.used_bytes)} / {bytes(metrics.swap.total_bytes)}</dd></div>{metrics.disks.map((disk) => <div key={disk.path}><dt>Disk {disk.path}</dt><dd>{measurement(disk.used_percent, "%")} · {bytes(disk.used_bytes)} / {bytes(disk.total_bytes)}</dd></div>)}</dl></div>
           </>}
-          <div className="compute-tags">{selected.services.map((s) => <span key={s.service_id}>{PRODUCT_NAMES[s.service_type] ?? s.service_type} · {s.desired_state}</span>)}</div>
+          <div className="compute-tags">{selected.services.map((s) => <span key={s.service_id}>{productNames[s.service_type === "image_to_image" ? "image2image" : s.service_type] ?? s.service_type} · {s.desired_state}</span>)}</div>
           <History key={`${selected.gpu_id}:${selected.revision}`} gpu={selected} />
         </section>}
       </>}

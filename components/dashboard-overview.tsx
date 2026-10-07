@@ -21,7 +21,7 @@ import {
   ProductIcon,
 } from "@/components/icons";
 
-import { UsageChart, UsageWindow, SERVICES, SERVICE_COLORS, formatTimestamp, serviceLabel } from "@/components/usage-chart";
+import { UsageChart, UsageWindow, serviceColor, formatTimestamp, serviceLabel } from "@/components/usage-chart";
 
 // Product badges configuration
 const PRODUCT_COLORS: Record<string, { bg: string; text: string; dot: string; label: string }> = {
@@ -247,8 +247,7 @@ export function DashboardOverview() {
 
   const chartSeries = useMemo(() => (timeline?.points ?? []).map((point) => ({
     date: point.timestamp, total: point.count,
-    image: point.breakdown.image ?? 0, image2image: point.breakdown.image2image ?? 0,
-    tts: point.breakdown.tts ?? 0, video: point.breakdown.video ?? 0,
+    ...point.breakdown,
   })), [timeline]);
   const sampledAt = timeline ? new Date(Math.min(lastUpdated.getTime(), new Date(timeline.end_time).getTime())).toISOString() : "";
 
@@ -482,10 +481,10 @@ export function DashboardOverview() {
           </div>
 
           <div className="graph-legend">
-            {(["all", ...SERVICES] as const).map((service) => (
+            {[...new Set(["all", ...availableProducts.map((product) => product.code), ...chartSeries.flatMap((point) => Object.keys(point).filter((key) => key !== "date" && key !== "total"))])].map((service) => (
               <div className="legend-item" key={service}>
-                <span className="legend-dot" style={{ background: SERVICE_COLORS[service] }} />
-                <span>{service === "all" ? "All services" : serviceLabel(service)}</span>
+                <span className="legend-dot" style={{ background: serviceColor(service) }} />
+                <span>{service === "all" ? "All services" : serviceLabel(service, availableProducts)}</span>
               </div>
             ))}
           </div>
@@ -501,7 +500,7 @@ export function DashboardOverview() {
           </div>
         ) : (
           timeline ? <div className="overview-graph-wrapper usage-service-chart">
-            <UsageChart key={`${timeWindow}-${selectedProduct}`} series={chartSeries} periodStart={timeline.start_time} periodEnd={timeline.end_time} sampledAt={sampledAt}
+            <UsageChart products={availableProducts.filter((product) => product.code !== "all")} key={`${timeWindow}-${selectedProduct}`} series={chartSeries} periodStart={timeline.start_time} periodEnd={timeline.end_time} sampledAt={sampledAt}
               bucketMinutes={timeline.time_window === "7d" ? 360 : timeline.time_window === "24h" ? 60 : 10} />
           </div> : <p>Loading usage charts…</p>
         )}
@@ -723,9 +722,9 @@ export function DashboardOverview() {
                                 className="product-count-pill"
                                 key={code}
                                 style={{ background: color.bg, color: color.text }}
-                                title={`${color.label}: ${count}`}
+                                title={`${serviceLabel(code, availableProducts)}: ${count}`}
                               >
-                                {count} {color.label}
+                                {count} {serviceLabel(code, availableProducts)}
                               </span>
                             );
                           })}

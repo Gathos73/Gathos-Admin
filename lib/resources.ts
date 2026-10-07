@@ -4,25 +4,7 @@ import { SUBSCRIPTION_CONFIG } from "./subscription-resource";
 import type {
   ResourceConfig,
   ResourceKey,
-  SelectOption,
 } from "./types";
-
-const PLAN_OPTIONS: SelectOption[] = [
-  { label: "Free", value: "free" },
-  { label: "Trial", value: "trial" },
-  { label: "Pro", value: "pro" },
-  { label: "Creator", value: "pro_plus" },
-  { label: "Business", value: "business" },
-  { label: "Starter", value: "starter" },
-  { label: "Scale", value: "scale" },
-];
-
-const GENERATION_TYPE_OPTIONS: SelectOption[] = [
-  { label: "Image", value: "image" },
-  { label: "Text to speech", value: "tts" },
-  { label: "Video", value: "video" },
-          { label: "Image to image", value: "image2image" },
-];
 
 export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
   ...CATALOG_CONFIGS,
@@ -172,16 +154,11 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
       {
         name: "type",
         label: "Type",
-        kind: "select",
+        kind: "relation",
         required: true,
         immutableOnEdit: true,
-        options: [
-          { label: "Image generation", value: "image" },
-          { label: "Text to speech", value: "tts" },
-          { label: "Video", value: "video" },
-          { label: "Image to image", value: "image2image" },
-        ],
-        defaultValue: "image",
+        referenceResource: "products",
+        referenceValue: "code",
       },
       {
         name: "is_active",
@@ -200,12 +177,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
       {
         name: "type",
         label: "Type",
-        options: [
-          { label: "Image generation", value: "image" },
-          { label: "Text to speech", value: "tts" },
-          { label: "Video", value: "video" },
-          { label: "Image to image", value: "image2image" },
-        ],
+        referenceResource: "products",
       },
       {
         name: "is_active",
@@ -443,11 +415,11 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
       {
         name: "type",
         label: "Type",
-        kind: "select",
+        kind: "relation",
         required: true,
-        options: GENERATION_TYPE_OPTIONS,
+        referenceResource: "products",
+        referenceValue: "code",
         createOnly: true,
-        defaultValue: "image",
       },
       { name: "prompt", label: "Prompt", kind: "textarea", required: true, createOnly: true },
       {
@@ -461,7 +433,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
         help: "Valid JSON passed to the generation provider.",
       },
       { name: "job_id", label: "Job ID", kind: "text", nullable: true, createOnly: true },
-      { name: "plan", label: "Plan snapshot", kind: "select", nullable: true, createOnly: true, options: PLAN_OPTIONS },
+      { name: "plan", label: "Plan snapshot", kind: "relation", referenceResource: "plans", referenceValue: "code", nullable: true, createOnly: true },
       { name: "ip_address", label: "IP address", kind: "text", nullable: true, createOnly: true },
       { name: "user_agent", label: "User agent", kind: "textarea", nullable: true, createOnly: true },
     ],
@@ -472,7 +444,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
       { label: "Plan", value: "plan" },
     ],
     filters: [
-      { name: "type", label: "Type", options: GENERATION_TYPE_OPTIONS },
+      { name: "type", label: "Type", referenceResource: "products" },
       { name: "plan", label: "Plan", options: [] },
     ],
     mutations: { basePath: "/generations" },
@@ -550,12 +522,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
       {
         name: "product",
         label: "Product",
-        options: [
-          { label: "Image", value: "image" },
-          { label: "Text to speech", value: "tts" },
-          { label: "Video", value: "video" },
-          { label: "Image to image", value: "image2image" },
-        ],
+        referenceResource: "products",
       },
       {
         name: "user_id",
