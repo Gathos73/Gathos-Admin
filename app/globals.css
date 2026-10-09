@@ -6257,7 +6257,7 @@ button:disabled {
 .usage-service-chart .chart-point { stroke-width: 1.5; }
 .usage-service-chart .chart-crosshair { stroke: #64748b; stroke-dasharray: 4 4; }
 .usage-service-chart .chart-active-point { fill: white; stroke: #078a52; stroke-width: 2; }
-.usage-service-chart .chart-hover-details { position: absolute; top: 0; right: 8px; padding: 12px; max-width: calc(100% - 16px); background: var(--surface, #fff); color: var(--ink, #1f2937); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; font-size: 12px; pointer-events: none; box-shadow: 0 4px 18px #00000012; z-index: 1; }
+.usage-service-chart .chart-hover-details { position: static; margin-top: 12px; padding: 12px; width: 100%; box-sizing: border-box; background: var(--surface, #fff); color: var(--ink, #1f2937); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; font-size: 12px; }
 .usage-service-chart .chart-inspector-summary { display: grid; gap: 4px; }
 .usage-service-chart .chart-inspector-services { display: flex; flex-wrap: wrap; gap: 8px; }
 .usage-service-chart .chart-inspector-services span { display: inline-flex; align-items: center; gap: 4px; }
@@ -6267,3 +6267,10 @@ button:disabled {
 .status-chart-legend { justify-content: flex-start; flex-wrap: wrap; gap: 8px 14px; margin: 16px 0; }
 .status-chart-legend .legend-item { font-size: 11px; }
 @media (max-width: 900px) { .service-status-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.service-status-card .chart-axis-label { font-size: 16px; }
+.usage-service-chart .chart-inspector-hint { margin: 0 0 8px; color: var(--muted, #64748b); }
+
+.service-status-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.service-success-rate { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--muted, #64748b); }
+.service-success-rate strong { font-size: 20px; font-weight: 700; color: var(--ink, #1f2937); font-variant-numeric: tabular-nums; }

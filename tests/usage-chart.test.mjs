@@ -147,3 +147,48 @@ test('status legends exclude activity that exists only in future intervals', () 
   assert.ok(!html.includes('Queued'));
   assert.ok(!html.includes('data-service="failed"'));
 });
+
+test('interval details are placed after the plot and initially show the latest available interval', () => {
+  const html = render();
+  assert.ok(html.indexOf('chart-inspector chart-hover-details') > html.indexOf('</svg>'));
+  assert.match(html, /Latest interval/);
+  assert.match(html, /2 requests · All services/);
+  assert.ok(!html.includes('999 requests'));
+});
+
+test('service charts use fewer time labels and keep all available data points', () => {
+  const renderStatus = (bucketMinutes) => renderToStaticMarkup(React.createElement(exports.ServiceStatusChart, {
+    ...props, bucketMinutes, serviceName: 'Image', statuses: ['succeeded'],
+    series: [{ date: start, total: 3, succeeded: 3 }, { date: '2026-09-25T08:10:00Z', total: 2, succeeded: 2 }],
+  }));
+  for (const [minutes, expectedLabels] of [[10, 4], [60, 4], [360, 3]]) {
+    const html = renderStatus(minutes);
+    assert.match(html, /viewBox="0 0 520 248"/);
+    assert.equal((html.match(/chart-axis-label chart-date-label/g) ?? []).length, expectedLabels);
+    assert.equal((html.match(/class="chart-point"/g) ?? []).length, 2);
+    assert.match(html, /service-status-card/);
+    assert.match(html, /2 requests · All statuses/);
+  }
+});
+
+test('service success percentage includes pending requests, ignores future buckets, and recalculates from refreshed data', () => {
+  const renderStatus = (series) => renderToStaticMarkup(React.createElement(exports.ServiceStatusChart, {
+    ...props, serviceName: 'Image', statuses: ['succeeded', 'failed', 'running'], series,
+  }));
+  const first = renderStatus([
+    { date: start, total: 10, succeeded: 3, failed: 2, running: 5 },
+    { date: '2026-09-25T08:10:00Z', total: 5, succeeded: 2, failed: 0, running: 3 },
+    { date: '2026-09-25T08:20:00Z', total: 100, succeeded: 100 },
+  ]);
+  assert.match(first, /Success<\/span><strong>33.3%/);
+  assert.match(first, /5 succeeded \/ 15 generations/);
+  assert.match(first, /Includes pending requests/);
+  const refreshed = renderStatus([
+    { date: start, total: 10, succeeded: 8, failed: 2, running: 0 },
+    { date: '2026-09-25T08:10:00Z', total: 5, succeeded: 4, failed: 0, running: 1 },
+  ]);
+  assert.match(refreshed, /Success<\/span><strong>80%/);
+  assert.match(refreshed, /12 succeeded \/ 15 generations/);
+  assert.match(renderStatus([{ date: start, total: 2, failed: 2 }]), /Success<\/span><strong>0%/);
+  assert.match(renderStatus([{ date: start, total: 0 }]), /Success<\/span><strong>—/);
+});

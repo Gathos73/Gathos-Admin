@@ -31,8 +31,8 @@ export function UsageWindow({ start, end }: { start: string; end: string }) {
   </div>;
 }
 
-export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, periodEnd, products = [], includeTotal = true, colors, chartLabel = "Combined and individual service request volume" }: {
-  includeTotal?: boolean; colors?: Record<string, string>; chartLabel?: string;
+export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, periodEnd, products = [], includeTotal = true, colors, compact = false, chartLabel = "Combined and individual service request volume" }: {
+  compact?: boolean; includeTotal?: boolean; colors?: Record<string, string>; chartLabel?: string;
   products?: Array<{ code: string; name: string }>; series: UsagePoint[]; bucketMinutes: number; sampledAt: string; periodStart: string; periodEnd: string;
 }) {
   const SERVICES = [...new Set([...products.map((product) => product.code), ...series.flatMap((point) => Object.keys(point).filter((key) => key !== "date" && key !== "total"))])];
@@ -44,12 +44,12 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
   const duration = Math.max(1, end - start);
   const activeIndex = Math.min(selectedIndex ?? Math.max(0, available.length - 1), Math.max(0, available.length - 1));
   const active = available[activeIndex];
-  const width = 780;
+  const width = compact ? 520 : 780;
   const height = 248;
-  const left = 38;
+  const left = compact ? 48 : 38;
   const right = 14;
   const top = 18;
-  const bottom = 32;
+  const bottom = compact ? 44 : 32;
   const chartWidth = width - left - right;
   const chartHeight = height - top - bottom;
   const actualMaxValue = Math.max(0, ...available.map((point) => point.total));
@@ -71,7 +71,8 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
     return { service, coordinates, path };
   });
   const coordinates = lines[0]?.coordinates ?? [];
-  const ticks = end > start ? Array.from({ length: 8 }, (_, index) => start + ((end - start) * index) / 7) : [start];
+  const tickCount = compact ? (bucketMinutes >= 360 ? 3 : 4) : 8;
+  const ticks = end > start ? Array.from({ length: tickCount }, (_, index) => start + ((end - start) * index) / (tickCount - 1)) : [start];
 
   return (
     <div className="usage-chart-wrap" tabIndex={0} role="group"
@@ -136,8 +137,9 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
           </text>
         ))}
       </svg>
-      {selectedIndex !== null && active ? (
+      {active ? (
         <div className="chart-inspector chart-hover-details">
+          <p className="chart-inspector-hint">{selectedIndex === null ? "Latest interval" : "Selected interval"} · Hover over the graph or use arrow keys to explore.</p>
           <div className="chart-inspector-summary" aria-live="polite" aria-atomic="true">
             <time dateTime={active.date}>{formatTimestamp(active.date)} – {new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(new Date(Math.min(new Date(active.date).getTime() + bucketMinutes * 60000, new Date(sampledAt).getTime())))}</time>
             <strong>{numberFormatter.format(active.total)} requests · {includeTotal ? "All services" : "All statuses"}</strong>
@@ -167,21 +169,30 @@ export function ServiceStatusChart({ statuses, serviceName, ...props }: {
   statuses: string[]; serviceName: string; series: UsagePoint[]; bucketMinutes: number;
   sampledAt: string; periodStart: string; periodEnd: string;
 }) {
-  const plottedStatuses = statuses.filter((status) => props.series.some((point) =>
-    new Date(point.date).getTime() <= new Date(props.sampledAt).getTime() && Number(point[status] ?? 0) > 0));
+  const available = props.series.filter((point) => new Date(point.date).getTime() <= new Date(props.sampledAt).getTime());
+  const succeeded = available.reduce((sum, point) => sum + Number(point.succeeded ?? 0), 0);
+  const total = available.reduce((sum, point) => sum + point.total, 0);
+  const successPercentage = total > 0 ? `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(succeeded / total * 100)}%` : "—";
+  const plottedStatuses = statuses.filter((status) => available.some((point) => Number(point[status] ?? 0) > 0));
   const series = props.series.map((point) => ({
     date: point.date, total: point.total,
     ...Object.fromEntries(plottedStatuses.map((status) => [status, Number(point[status] ?? 0)])),
   }));
-  return <article className="overview-card usage-service-chart">
-    <h3 className="card-title">{serviceName}</h3>
+  return <article className="overview-card usage-service-chart service-status-card">
+    <div className="service-status-header">
+      <h3 className="card-title">{serviceName}</h3>
+      <div className="service-success-rate">
+        <span>Success</span><strong>{successPercentage}</strong>
+      </div>
+    </div>
+    <p className="card-description">{numberFormatter.format(succeeded)} succeeded / {numberFormatter.format(total)} generations · Includes pending requests</p>
     <div className="graph-legend status-chart-legend">
       {plottedStatuses.map((status) => <span className="legend-item" key={status}>
         <i className="legend-dot" style={{ background: STATUS_COLORS[status] ?? serviceColor(status) }} />
         {statusLabel(status)}
       </span>)}
     </div>
-    {plottedStatuses.length ? <UsageChart {...props} series={series} includeTotal={false} colors={STATUS_COLORS}
+    {plottedStatuses.length ? <UsageChart {...props} series={series} compact includeTotal={false} colors={STATUS_COLORS}
       chartLabel={`${serviceName} generation statuses`}
       products={plottedStatuses.map((status) => ({ code: status, name: statusLabel(status) }))} />
       : <p className="empty-row">No generation activity in the plotted intervals.</p>}

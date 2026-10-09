@@ -214,7 +214,11 @@ export function DashboardOverview() {
   // Set up live auto-refresh timer
   useEffect(() => {
     if (refreshIntervalSec <= 0) return;
+    let active = true;
+    let refreshing = false;
     const interval = setInterval(() => {
+      if (refreshing) return;
+      refreshing = true;
       const tzOffset = new Date().getTimezoneOffset();
       Promise.all([
         getOverviewTimeline({
@@ -235,14 +239,20 @@ export function DashboardOverview() {
         }),
       ])
         .then(([tData, uData]) => {
+          if (!active) return;
+          setError(null);
           setTimeline(tData);
           setUserStats(uData);
           setLastUpdated(new Date());
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => { refreshing = false; });
     }, refreshIntervalSec * 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, [refreshIntervalSec, timeWindow, selectedProduct, page, pageSize, debouncedSearch, orderBy, descending, activeOnly]);
 
   const chartSeries = useMemo(() => (timeline?.points ?? []).map((point) => ({
@@ -512,6 +522,7 @@ export function DashboardOverview() {
           <div>
             <h2 className="card-title" id="service-status-heading">Generation Statuses by Service</h2>
             <p className="card-description">Current status of generations grouped by creation time. Uses the selected time window and product filter.</p>
+            <p className="card-description">Updated {formatTimestamp(sampledAt)} · Refreshes with Usage</p>
           </div>
         </div>
         <div className="service-status-grid">

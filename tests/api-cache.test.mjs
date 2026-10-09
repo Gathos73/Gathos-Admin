@@ -108,3 +108,24 @@ test('registry mutations forward idempotency and revision headers through authen
   assert.equal(calls[2].headers.get('If-Match'), '"gpu:gpu-one:revision:3"');
   assert.ok(calls.every((call) => call.credentials === 'include'));
 });
+
+test('overview refresh fetches fresh usage and service status counts together', async (t) => {
+  globalThis.window = {};
+  t.after(() => { delete globalThis.window; clearRequestCache(); });
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async (path) => {
+    assert.ok(path.startsWith('/api/backend/api/admin/overview/timeline?'));
+    calls++;
+    return Response.json({
+      total_generations: calls,
+      points: [{ count: calls, breakdown: { image: calls }, status_breakdown: { image: { succeeded: calls, failed: 2 } } }],
+    });
+  });
+  const params = { timeWindow: 'current_window', product: 'all', tzOffset: 0 };
+  const initial = await api.getOverviewTimeline(params);
+  const refreshed = await api.getOverviewTimeline(params);
+  assert.equal(calls, 2);
+  assert.equal(initial.total_generations, 1);
+  assert.equal(refreshed.total_generations, 2);
+  assert.equal(refreshed.points[0].status_breakdown.image.succeeded, 2);
+});
