@@ -167,16 +167,23 @@ export function ServiceStatusChart({ statuses, serviceName, ...props }: {
   statuses: string[]; serviceName: string; series: UsagePoint[]; bucketMinutes: number;
   sampledAt: string; periodStart: string; periodEnd: string;
 }) {
+  const plottedStatuses = statuses.filter((status) => props.series.some((point) =>
+    new Date(point.date).getTime() <= new Date(props.sampledAt).getTime() && Number(point[status] ?? 0) > 0));
+  const series = props.series.map((point) => ({
+    date: point.date, total: point.total,
+    ...Object.fromEntries(plottedStatuses.map((status) => [status, Number(point[status] ?? 0)])),
+  }));
   return <article className="overview-card usage-service-chart">
     <h3 className="card-title">{serviceName}</h3>
     <div className="graph-legend status-chart-legend">
-      {statuses.map((status) => <span className="legend-item" key={status}>
+      {plottedStatuses.map((status) => <span className="legend-item" key={status}>
         <i className="legend-dot" style={{ background: STATUS_COLORS[status] ?? serviceColor(status) }} />
         {statusLabel(status)}
       </span>)}
     </div>
-    <UsageChart {...props} includeTotal={false} colors={STATUS_COLORS}
+    {plottedStatuses.length ? <UsageChart {...props} series={series} includeTotal={false} colors={STATUS_COLORS}
       chartLabel={`${serviceName} generation statuses`}
-      products={statuses.map((status) => ({ code: status, name: statusLabel(status) }))} />
+      products={plottedStatuses.map((status) => ({ code: status, name: statusLabel(status) }))} />
+      : <p className="empty-row">No generation activity in the plotted intervals.</p>}
   </article>;
 }

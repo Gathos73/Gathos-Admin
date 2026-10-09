@@ -112,13 +112,14 @@ test('service status charts plot separate status lines without a combined usage 
       { date: '2026-09-25T08:20:00Z', total: 999, succeeded: 999 },
     ],
   }));
-  assert.equal((html.match(/class="chart-line"/g) ?? []).length, 4);
+  assert.equal((html.match(/class="chart-line"/g) ?? []).length, 3);
   assert.ok(!html.includes('data-service="all"'));
   assert.match(html, /Image Generation generation statuses/);
   assert.match(html, /Succeeded: 3 requests/);
   assert.match(html, /Failed: 7 requests/);
   assert.match(html, /Running: 5 requests/);
-  assert.match(html, /Queued: 0 requests/);
+  assert.ok(!html.includes('Queued'));
+  assert.ok(!html.includes('data-service="queued"'));
   assert.match(html, /stroke:#dc2626/);
   assert.ok(!html.includes('999 requests'));
 });
@@ -127,6 +128,22 @@ test('status charts with no catalog or intervals have finite geometry', () => {
   const html = renderToStaticMarkup(React.createElement(exports.ServiceStatusChart, {
     ...props, serviceName: 'Idle service', statuses: [], series: [],
   }));
-  assert.match(html, /No intervals available yet/);
+  assert.match(html, /No generation activity in the plotted intervals/);
   assert.ok(!/NaN|Infinity/.test(html));
+});
+
+
+test('status legends exclude activity that exists only in future intervals', () => {
+  const html = renderToStaticMarkup(React.createElement(exports.ServiceStatusChart, {
+    ...props, serviceName: 'Image', statuses: ['succeeded', 'failed', 'queued'],
+    series: [
+      { date: start, total: 2, succeeded: 2, failed: 0, queued: 0 },
+      { date: '2026-09-25T08:20:00Z', total: 8, succeeded: 0, failed: 8, queued: 0 },
+    ],
+  }));
+  assert.equal((html.match(/class="chart-line"/g) ?? []).length, 1);
+  assert.match(html, /Succeeded/);
+  assert.ok(!html.includes('Failed'));
+  assert.ok(!html.includes('Queued'));
+  assert.ok(!html.includes('data-service="failed"'));
 });
