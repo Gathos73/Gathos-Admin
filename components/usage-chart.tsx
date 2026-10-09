@@ -31,10 +31,12 @@ export function UsageWindow({ start, end }: { start: string; end: string }) {
   </div>;
 }
 
-export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, periodEnd, products = [] }: {
+export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, periodEnd, products = [], includeTotal = true, colors, chartLabel = "Combined and individual service request volume" }: {
+  includeTotal?: boolean; colors?: Record<string, string>; chartLabel?: string;
   products?: Array<{ code: string; name: string }>; series: UsagePoint[]; bucketMinutes: number; sampledAt: string; periodStart: string; periodEnd: string;
 }) {
   const SERVICES = [...new Set([...products.map((product) => product.code), ...series.flatMap((point) => Object.keys(point).filter((key) => key !== "date" && key !== "total"))])];
+  const color = (code: string) => colors?.[code] ?? serviceColor(code);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const available = series.filter((point) => new Date(point.date).getTime() <= new Date(sampledAt).getTime());
   const start = new Date(periodStart).getTime();
@@ -54,7 +56,7 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
   // Reserve at least 20% headroom, with evenly spaced whole-request ticks.
   const tickStep = Math.max(1, Math.ceil((actualMaxValue * 1.2) / 4));
   const roundedMax = tickStep * 4;
-  const lines = (["all", ...SERVICES] as const).map((service) => {
+  const lines = (includeTotal ? ["all", ...SERVICES] : SERVICES).map((service) => {
     const coordinates = available.map((point) => ({
       x: left + ((new Date(point.date).getTime() - start) / duration) * chartWidth,
       y: top + chartHeight - ((service === "all" ? point.total : Number(point[service] ?? 0)) / roundedMax) * chartHeight,
@@ -68,12 +70,12 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
     }).join(" ");
     return { service, coordinates, path };
   });
-  const coordinates = lines[0].coordinates;
+  const coordinates = lines[0]?.coordinates ?? [];
   const ticks = end > start ? Array.from({ length: 8 }, (_, index) => start + ((end - start) * index) / 7) : [start];
 
   return (
     <div className="usage-chart-wrap" tabIndex={0} role="group"
-      aria-label="Interactive request chart. Use arrow keys to explore intervals."
+      aria-label={`${chartLabel}. Use arrow keys to explore intervals.`}
       onPointerLeave={() => setSelectedIndex(null)}
       onBlur={() => setSelectedIndex(null)}
       onKeyDown={(event) => {
@@ -84,7 +86,7 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
       }}>
 
       <svg
-        aria-label={`Combined and individual service request volume. Peak interval: ${actualMaxValue} requests.`}
+        aria-label={`${chartLabel}. Peak interval: ${actualMaxValue} requests.`}
         onPointerMove={(event) => {
           const rect = event.currentTarget.getBoundingClientRect();
           const x = (event.clientX - rect.left) / rect.width * width;
@@ -109,9 +111,9 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
         })}
         {lines.map(({ service, coordinates: points, path }) => (
           <g key={service} aria-label={service === "all" ? "All services combined" : serviceLabel(service, products)}>
-            {path ? <path className="chart-line" data-service={service} d={path} style={{ stroke: serviceColor(service) }} /> : null}
+            {path ? <path className="chart-line" data-service={service} d={path} style={{ stroke: color(service) }} /> : null}
             {points.map((point, index) => (
-              <circle className="chart-point" style={{ fill: "white", stroke: serviceColor(service) }}
+              <circle className="chart-point" style={{ fill: "white", stroke: color(service) }}
                 cx={point.x} cy={point.y} key={available[index].date} r="2.0">
                 <title>{`${formatTimestamp(available[index].date)} · ${service === "all" ? "All services" : serviceLabel(service, products)}: ${service === "all" ? available[index].total : available[index][service]} requests`}</title>
               </circle>
@@ -122,7 +124,7 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
           <g aria-hidden="true">
             <line className="chart-crosshair" x1={coordinates[activeIndex].x} x2={coordinates[activeIndex].x} y1={top} y2={top + chartHeight} />
             {lines.map(({ service, coordinates: points }) => (
-              <circle key={service} className="chart-active-point" style={{ stroke: serviceColor(service) }} cx={points[activeIndex].x} cy={points[activeIndex].y} r="5" />
+              <circle key={service} className="chart-active-point" style={{ stroke: color(service) }} cx={points[activeIndex].x} cy={points[activeIndex].y} r="5" />
             ))}
           </g>
         ) : null}
@@ -138,11 +140,11 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
         <div className="chart-inspector chart-hover-details">
           <div className="chart-inspector-summary" aria-live="polite" aria-atomic="true">
             <time dateTime={active.date}>{formatTimestamp(active.date)} – {new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(new Date(Math.min(new Date(active.date).getTime() + bucketMinutes * 60000, new Date(sampledAt).getTime())))}</time>
-            <strong>{numberFormatter.format(active.total)} requests · All services</strong>
+            <strong>{numberFormatter.format(active.total)} requests · {includeTotal ? "All services" : "All statuses"}</strong>
           </div>
-          <p className="analytics-period">All services in this interval</p>
+          <p className="analytics-period">{includeTotal ? "All services" : "Statuses"} in this interval</p>
           <div className="chart-inspector-services">
-            {SERVICES.map((type) => <span key={type}><i className={`legend-dot legend-dot--${type}`} style={{ background: serviceColor(type) }} />{serviceLabel(type, products)} <strong>{numberFormatter.format(Number(active[type] ?? 0))}</strong></span>)}
+            {SERVICES.map((type) => <span key={type}><i className={`legend-dot legend-dot--${type}`} style={{ background: color(type) }} />{serviceLabel(type, products)} <strong>{numberFormatter.format(Number(active[type] ?? 0))}</strong></span>)}
           </div>
         </div>
       ) : !available.length ? <p className="empty-row">No intervals available yet.</p> : null}
@@ -150,3 +152,31 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
   );
 }
 
+export const STATUS_COLORS: Record<string, string> = {
+  received: "#64748b", validating: "#0891b2", waiting_capacity: "#a16207",
+  queued: "#d97706", leased: "#9333ea", running: "#0284c7", retry_wait: "#ea580c",
+  cancel_requested: "#be185d", lease_expired: "#854d0e", orphaned: "#475569",
+  submission_unknown: "#4f46e5", succeeded: "#059669", failed: "#dc2626",
+  cancelled: "#db2777", expired: "#78716c",
+};
+export function statusLabel(status: string): string {
+  return status.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
+}
+
+export function ServiceStatusChart({ statuses, serviceName, ...props }: {
+  statuses: string[]; serviceName: string; series: UsagePoint[]; bucketMinutes: number;
+  sampledAt: string; periodStart: string; periodEnd: string;
+}) {
+  return <article className="overview-card usage-service-chart">
+    <h3 className="card-title">{serviceName}</h3>
+    <div className="graph-legend status-chart-legend">
+      {statuses.map((status) => <span className="legend-item" key={status}>
+        <i className="legend-dot" style={{ background: STATUS_COLORS[status] ?? serviceColor(status) }} />
+        {statusLabel(status)}
+      </span>)}
+    </div>
+    <UsageChart {...props} includeTotal={false} colors={STATUS_COLORS}
+      chartLabel={`${serviceName} generation statuses`}
+      products={statuses.map((status) => ({ code: status, name: statusLabel(status) }))} />
+  </article>;
+}

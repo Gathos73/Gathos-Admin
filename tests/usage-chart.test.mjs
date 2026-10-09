@@ -102,3 +102,31 @@ test('catalog-defined products appear in admin usage charts', () => {
   assert.match(html, /Speech to Text: 3 requests/);
   assert.match(html, /Future product: 2 requests/);
 });
+
+test('service status charts plot separate status lines without a combined usage line', () => {
+  const { ServiceStatusChart } = exports;
+  const html = renderToStaticMarkup(React.createElement(ServiceStatusChart, {
+    ...props, serviceName: 'Image Generation', statuses: ['succeeded', 'failed', 'running', 'queued'],
+    series: [
+      { date: start, total: 15, succeeded: 3, failed: 7, running: 5, queued: 0 },
+      { date: '2026-09-25T08:20:00Z', total: 999, succeeded: 999 },
+    ],
+  }));
+  assert.equal((html.match(/class="chart-line"/g) ?? []).length, 4);
+  assert.ok(!html.includes('data-service="all"'));
+  assert.match(html, /Image Generation generation statuses/);
+  assert.match(html, /Succeeded: 3 requests/);
+  assert.match(html, /Failed: 7 requests/);
+  assert.match(html, /Running: 5 requests/);
+  assert.match(html, /Queued: 0 requests/);
+  assert.match(html, /stroke:#dc2626/);
+  assert.ok(!html.includes('999 requests'));
+});
+
+test('status charts with no catalog or intervals have finite geometry', () => {
+  const html = renderToStaticMarkup(React.createElement(exports.ServiceStatusChart, {
+    ...props, serviceName: 'Idle service', statuses: [], series: [],
+  }));
+  assert.match(html, /No intervals available yet/);
+  assert.ok(!/NaN|Infinity/.test(html));
+});

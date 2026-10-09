@@ -21,7 +21,7 @@ import {
   ProductIcon,
 } from "@/components/icons";
 
-import { UsageChart, UsageWindow, serviceColor, formatTimestamp, serviceLabel } from "@/components/usage-chart";
+import { UsageChart, UsageWindow, ServiceStatusChart, serviceColor, formatTimestamp, serviceLabel } from "@/components/usage-chart";
 
 // Product badges configuration
 const PRODUCT_COLORS: Record<string, { bg: string; text: string; dot: string; label: string }> = {
@@ -399,7 +399,7 @@ export function DashboardOverview() {
       <section aria-label="Key Telemetry Metrics" className="overview-kpi-grid">
         <div className="kpi-card">
           <div className="kpi-top">
-            <span className="kpi-label">Total Generations</span>
+            <span className="kpi-label">Succeeded Generations</span>
             <span className="kpi-icon-wrap">
               <SparklesIcon size={18} />
             </span>
@@ -447,7 +447,7 @@ export function DashboardOverview() {
           </div>
           <div className="kpi-footer">
             <span className="kpi-badge">Unique Customers</span>
-            <span className="kpi-detail">Generating in window</span>
+            <span className="kpi-detail">Succeeded in window</span>
           </div>
         </div>
 
@@ -476,7 +476,7 @@ export function DashboardOverview() {
           <div>
             <span className="card-kicker">Time vs Count</span>
             <h2 className="card-title" id="live-graph-heading">
-              Generation Throughput
+              Usage · Succeeded Generations
             </h2>
           </div>
 
@@ -500,12 +500,33 @@ export function DashboardOverview() {
           </div>
         ) : (
           timeline ? <div className="overview-graph-wrapper usage-service-chart">
-            <UsageChart products={availableProducts.filter((product) => product.code !== "all")} key={`${timeWindow}-${selectedProduct}`} series={chartSeries} periodStart={timeline.start_time} periodEnd={timeline.end_time} sampledAt={sampledAt}
+            <UsageChart chartLabel="Succeeded generations by service" products={availableProducts.filter((product) => product.code !== "all")} key={`${timeWindow}-${selectedProduct}`} series={chartSeries} periodStart={timeline.start_time} periodEnd={timeline.end_time} sampledAt={sampledAt}
               bucketMinutes={timeline.time_window === "7d" ? 360 : timeline.time_window === "24h" ? 60 : 10} />
           </div> : <p>Loading usage charts…</p>
         )}
-        {timeline ? <p className="card-description">As of {formatTimestamp(sampledAt)} · Axis times are local</p> : null}
+        {timeline ? <p className="card-description">As of {formatTimestamp(sampledAt)} · Succeeded only · Axis times are local</p> : null}
       </section>
+
+      {timeline && !error ? <section aria-labelledby="service-status-heading">
+        <div className="overview-card-header">
+          <div>
+            <h2 className="card-title" id="service-status-heading">Generation Statuses by Service</h2>
+            <p className="card-description">Current status of generations grouped by creation time. Uses the selected time window and product filter.</p>
+          </div>
+        </div>
+        <div className="service-status-grid">
+          {[...new Set([...availableProducts.map((product) => product.code), ...timeline.points.flatMap((point) => Object.keys(point.status_breakdown ?? {}))])]
+            .filter((code) => code !== "all" && (selectedProduct === "all" || code === selectedProduct))
+            .map((code) => <ServiceStatusChart key={`${timeWindow}-${code}`} serviceName={serviceLabel(code, availableProducts)}
+              statuses={timeline.statuses ?? []}
+              series={timeline.points.map((point) => {
+                const counts = point.status_breakdown?.[code] ?? {};
+                return { date: point.timestamp, total: Object.values(counts).reduce((sum, count) => sum + count, 0), ...counts };
+              })}
+              periodStart={timeline.start_time} periodEnd={timeline.end_time} sampledAt={sampledAt}
+              bucketMinutes={timeline.time_window === "7d" ? 360 : timeline.time_window === "24h" ? 60 : 10} />)}
+        </div>
+      </section> : null}
 
       {/* ── USER STATISTICS TABLE ── */}
       <section aria-labelledby="user-stats-heading" className="overview-card overview-table-card">

@@ -369,6 +369,7 @@ export type TimelinePoint = {
   label: string;
   count: number;
   breakdown: Record<string, number>;
+  status_breakdown: Record<string, Record<string, number>>;
 };
 
 export type OverviewTimelineResponse = {
@@ -383,6 +384,8 @@ export type OverviewTimelineResponse = {
   peak_count: number;
   active_users: number;
   points: TimelinePoint[];
+  statuses: string[];
+  usage_status: "succeeded";
 };
 
 export type OverviewUserStat = {
@@ -394,6 +397,7 @@ export type OverviewUserStat = {
   plan_code: string;
   generation_count: number;
   breakdown: Record<string, number>;
+  status_breakdown: Record<string, Record<string, number>>;
   last_active: string | null;
 };
 
