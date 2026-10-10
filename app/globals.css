@@ -6274,3 +6274,6 @@ button:disabled {
 .service-status-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .service-success-rate { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--muted, #64748b); }
 .service-success-rate strong { font-size: 20px; font-weight: 700; color: var(--ink, #1f2937); font-variant-numeric: tabular-nums; }
+
+.usage-service-chart .chart-cursor-tooltip { position: absolute; margin: 0; padding: 10px; max-width: calc(100% - 16px); pointer-events: none; z-index: 2; box-shadow: 0 4px 18px #00000018; font-size: 11px; }
+.usage-service-chart .chart-cursor-tooltip .chart-inspector-services { margin-top: 8px; gap: 4px 10px; }

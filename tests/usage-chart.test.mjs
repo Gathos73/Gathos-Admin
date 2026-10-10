@@ -192,3 +192,17 @@ test('service success percentage includes pending requests, ignores future bucke
   assert.match(renderStatus([{ date: start, total: 2, failed: 2 }]), /Success<\/span><strong>0%/);
   assert.match(renderStatus([{ date: start, total: 0 }]), /Success<\/span><strong>—/);
 });
+
+test('cursor tooltips follow the pointer and flip inside the chart edges', () => {
+  const size = { width: 120, height: 80 };
+  const position = (x, y) => exports.tooltipPosition({ x, y, width: 520, height: 248 }, size);
+  assert.deepEqual({ ...position(100, 50) }, { left: 112, top: 62 });
+  assert.deepEqual({ ...position(200, 70) }, { left: 212, top: 82 });
+  assert.deepEqual({ ...position(510, 240) }, { left: 378, top: 148 });
+  for (const [x, y] of [[0, 0], [520, 0], [0, 248], [520, 248]]) {
+    const placed = position(x, y);
+    assert.ok(placed.left >= 8 && placed.left + size.width <= 512);
+    assert.ok(placed.top >= 8 && placed.top + size.height <= 240);
+  }
+  assert.ok(!render().includes('<title>'));
+});
