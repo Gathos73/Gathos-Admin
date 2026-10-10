@@ -406,57 +406,59 @@ export function DashboardOverview() {
 
       {/* ── KPI METRICS STRIP ── */}
       <section aria-label="Key Telemetry Metrics" className="overview-kpi-grid">
-        <div className="kpi-card">
-          <div className="kpi-top">
-            <span className="kpi-label">Succeeded Generations</span>
-            <span className="kpi-icon-wrap">
-              <SparklesIcon size={18} />
-            </span>
+        <div className="overview-metric-grid">
+          <div className="kpi-card">
+            <div className="kpi-top">
+              <span className="kpi-label">Succeeded Generations</span>
+              <span className="kpi-icon-wrap">
+                <SparklesIcon size={18} />
+              </span>
+            </div>
+            <div className="kpi-value">
+              {loadingTimeline ? "…" : (timeline?.total_generations ?? 0).toLocaleString()}
+            </div>
+            <div className="kpi-footer">
+              <span className="kpi-badge">
+                {timeWindow === "current_window" ? "Current UTC Window" : timeWindow === "24h" ? "Past 24 Hours" : "Past 7 Days"}
+              </span>
+              <span className="kpi-detail">
+                {selectedProduct === "all" ? "All Products" : selectedProduct.toUpperCase()}
+              </span>
+            </div>
           </div>
-          <div className="kpi-value">
-            {loadingTimeline ? "…" : (timeline?.total_generations ?? 0).toLocaleString()}
-          </div>
-          <div className="kpi-footer">
-            <span className="kpi-badge">
-              {timeWindow === "current_window" ? "Current UTC Window" : timeWindow === "24h" ? "Past 24 Hours" : "Past 7 Days"}
-            </span>
-            <span className="kpi-detail">
-              {selectedProduct === "all" ? "All Products" : selectedProduct.toUpperCase()}
-            </span>
-          </div>
-        </div>
 
-        <div className="kpi-card">
-          <div className="kpi-top">
-            <span className="kpi-label">Active Users</span>
-            <span className="kpi-icon-wrap">
-              <UsersIcon size={18} />
-            </span>
+          <div className="kpi-card">
+            <div className="kpi-top">
+              <span className="kpi-label">Active Users</span>
+              <span className="kpi-icon-wrap">
+                <UsersIcon size={18} />
+              </span>
+            </div>
+            <div className="kpi-value">
+              {loadingTimeline ? "…" : (timeline?.active_users ?? 0).toLocaleString()}
+            </div>
+            <div className="kpi-footer">
+              <span className="kpi-badge">Unique Customers</span>
+              <span className="kpi-detail">Succeeded in window</span>
+            </div>
           </div>
-          <div className="kpi-value">
-            {loadingTimeline ? "…" : (timeline?.active_users ?? 0).toLocaleString()}
-          </div>
-          <div className="kpi-footer">
-            <span className="kpi-badge">Unique Customers</span>
-            <span className="kpi-detail">Succeeded in window</span>
-          </div>
-        </div>
 
-        <div className="kpi-card">
-          <div className="kpi-top">
-            <span className="kpi-label">Top Product</span>
-            <span className="kpi-icon-wrap is-product">
-              <ProductIcon size={18} />
-            </span>
-          </div>
-          <div className="kpi-value kpi-product-name">
-            {loadingTimeline ? "…" : topProductSummary.name}
-          </div>
-          <div className="kpi-footer">
-            <span className="kpi-badge is-product">
-              {loadingTimeline ? "…" : `${topProductSummary.count.toLocaleString()} calls`}
-            </span>
-            <span className="kpi-detail">Largest throughput share</span>
+          <div className="kpi-card">
+            <div className="kpi-top">
+              <span className="kpi-label">Top Product</span>
+              <span className="kpi-icon-wrap is-product">
+                <ProductIcon size={18} />
+              </span>
+            </div>
+            <div className="kpi-value kpi-product-name">
+              {loadingTimeline ? "…" : topProductSummary.name}
+            </div>
+            <div className="kpi-footer">
+              <span className="kpi-badge is-product">
+                {loadingTimeline ? "…" : `${topProductSummary.count.toLocaleString()} calls`}
+              </span>
+              <span className="kpi-detail">Largest throughput share</span>
+            </div>
           </div>
         </div>
         <ProductShareCard series={chartSeries} sampledAt={sampledAt}

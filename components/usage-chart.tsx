@@ -49,9 +49,10 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
   const SERVICES = [...new Set([...products.map((product) => product.code), ...series.flatMap((point) => Object.keys(point).filter((key) => key !== "date" && key !== "total"))])];
   const color = (code: string) => colors?.[code] ?? serviceColor(code);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [cursor, setCursor] = useState<{ x: number; y: number; width: number; height: number; containerHeight: number } | null>(null);
+  const [cursor, setCursor] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const inspectorRef = useRef<HTMLDivElement>(null);
   const [inspectorSize, setInspectorSize] = useState({ width: 280, height: 160 });
+  const inspecting = selectedIndex !== null;
   useEffect(() => {
     const inspector = inspectorRef.current;
     if (!inspector) return;
@@ -61,7 +62,7 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
     });
     observer.observe(inspector);
     return () => observer.disconnect();
-  }, [series]);
+  }, [series, inspecting]);
   const available = series.filter((point) => new Date(point.date).getTime() <= new Date(sampledAt).getTime());
   const start = new Date(periodStart).getTime();
   const end = Math.max(start, new Date(periodEnd).getTime());
@@ -100,7 +101,6 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
 
   return (
     <div className="usage-chart-wrap" tabIndex={0} role="group"
-      style={cursor ? { minHeight: cursor.containerHeight } : undefined}
       aria-label={`${chartLabel}. Use arrow keys to explore intervals.`}
       onPointerLeave={() => { setSelectedIndex(null); setCursor(null); }}
       onBlur={() => { setSelectedIndex(null); setCursor(null); }}
@@ -116,8 +116,7 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
         aria-label={`${chartLabel}. Peak interval: ${actualMaxValue} requests.`}
         onPointerMove={(event) => {
           const rect = event.currentTarget.getBoundingClientRect();
-          setCursor({ x: event.clientX - rect.left, y: event.clientY - rect.top, width: rect.width, height: rect.height,
-            containerHeight: event.currentTarget.parentElement?.getBoundingClientRect().height ?? rect.height });
+          setCursor({ x: event.clientX - rect.left, y: event.clientY - rect.top, width: rect.width, height: rect.height });
           const x = (event.clientX - rect.left) / rect.width * width;
           setSelectedIndex(coordinates.reduce((best, point, index) =>
             Math.abs(point.x - x) < Math.abs(coordinates[best].x - x) ? index : best, 0));
@@ -165,15 +164,13 @@ export function UsageChart({ series, bucketMinutes, sampledAt, periodStart, peri
           </text>
         ))}
       </svg>
-      {active ? (
-        <div ref={inspectorRef} className={`chart-inspector chart-hover-details${cursor ? " chart-cursor-tooltip" : ""}`}
-          style={cursor ? { ...tooltipPosition(cursor, inspectorSize), width: Math.min(280, Math.max(0, cursor.width - 16)) } : undefined}>
-          {!cursor ? <p className="chart-inspector-hint">{selectedIndex === null ? "Latest interval" : "Selected interval"} · Hover over the graph or use arrow keys to explore.</p> : null}
+      {active && inspecting ? (
+        <div ref={inspectorRef} className="chart-inspector chart-hover-details chart-cursor-tooltip"
+          style={cursor ? { ...tooltipPosition(cursor, inspectorSize), width: Math.min(280, Math.max(0, cursor.width - 16)) } : { left: 8, top: 8, width: 280 }}>
           <div className="chart-inspector-summary" aria-live="polite" aria-atomic="true">
             <time dateTime={active.date}>{formatTimestamp(active.date)} – {new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(new Date(Math.min(new Date(active.date).getTime() + bucketMinutes * 60000, new Date(sampledAt).getTime())))}</time>
             <strong>{numberFormatter.format(active.total)} requests · {includeTotal ? "All services" : "All statuses"}</strong>
           </div>
-          {!cursor ? <p className="analytics-period">{includeTotal ? "All services" : "Statuses"} in this interval</p> : null}
           <div className="chart-inspector-services">
             {SERVICES.map((type) => <span key={type}><i className={`legend-dot legend-dot--${type}`} style={{ background: color(type) }} />{serviceLabel(type, products)} <strong>{numberFormatter.format(Number(active[type] ?? 0))}</strong></span>)}
           </div>

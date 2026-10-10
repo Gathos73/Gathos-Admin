@@ -148,11 +148,10 @@ test('status legends exclude activity that exists only in future intervals', () 
   assert.ok(!html.includes('data-service="failed"'));
 });
 
-test('interval details are placed after the plot and initially show the latest available interval', () => {
+test('charts have no interval details panel until pointer or keyboard selection', () => {
   const html = render();
-  assert.ok(html.indexOf('chart-inspector chart-hover-details') > html.indexOf('</svg>'));
-  assert.match(html, /Latest interval/);
-  assert.match(html, /2 requests · All services/);
+  assert.ok(!html.includes('chart-hover-details'));
+  assert.ok(!html.includes('Latest interval'));
   assert.ok(!html.includes('999 requests'));
 });
 
@@ -167,7 +166,7 @@ test('service charts use fewer time labels and keep all available data points', 
     assert.equal((html.match(/chart-axis-label chart-date-label/g) ?? []).length, expectedLabels);
     assert.equal((html.match(/class="chart-point"/g) ?? []).length, 2);
     assert.match(html, /service-status-card/);
-    assert.match(html, /2 requests · All statuses/);
+    assert.ok(!html.includes('chart-hover-details'));
   }
 });
 
