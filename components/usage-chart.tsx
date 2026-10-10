@@ -227,3 +227,51 @@ export function ServiceStatusChart({ statuses, serviceName, ...props }: {
       : <p className="empty-row">No generation activity in the plotted intervals.</p>}
   </article>;
 }
+
+
+export function ProductShareCard({ series, sampledAt, products, loading = false }: {
+  series: UsagePoint[]; sampledAt: string; products: Array<{ code: string; name: string }>; loading?: boolean;
+}) {
+  const counts: Record<string, number> = {};
+  for (const point of series) {
+    if (new Date(point.date).getTime() > new Date(sampledAt).getTime()) continue;
+    for (const [code, count] of Object.entries(point)) {
+      if (code !== "date" && code !== "total") counts[code] = (counts[code] ?? 0) + Number(count);
+    }
+  }
+  const shares = Object.entries(counts).filter(([, count]) => count > 0)
+    .sort(([a, countA], [b, countB]) => countB - countA || a.localeCompare(b));
+  const total = shares.reduce((sum, [, count]) => sum + count, 0);
+  const circumference = 2 * Math.PI * 44;
+  const percentage = new Intl.NumberFormat("en-US", { style: "percent", maximumFractionDigits: 1 });
+  return <article className="kpi-card product-share-card" aria-label="Product share of succeeded generations">
+    <div className="kpi-top"><h2 className="kpi-label">Product Share</h2></div>
+    {loading ? <p className="card-description">Loading product share…</p> : total === 0 ?
+      <p className="card-description">No succeeded generations in this window.</p> : <>
+        <div className="product-share-body">
+          <svg className="product-share-donut" viewBox="0 0 128 128" role="img"
+            aria-label={`${numberFormatter.format(total)} succeeded generations. ${shares.map(([code, count]) => `${serviceLabel(code, products)}: ${percentage.format(count / total)}`).join(". ")}`}>
+            {shares.map(([code, count], index) => {
+              const length = count / total * circumference;
+              const segmentOffset = shares.slice(0, index).reduce((sum, [, value]) => sum + value, 0) / total * circumference;
+              return <circle key={code} data-product={code} cx="64" cy="64" r="44" fill="none"
+                stroke={serviceColor(code)} strokeWidth="18" strokeDasharray={`${length} ${circumference - length}`}
+                strokeDashoffset={-segmentOffset} transform="rotate(-90 64 64)">
+                <title>{`${serviceLabel(code, products)}: ${numberFormatter.format(count)} (${percentage.format(count / total)})`}</title>
+              </circle>;
+            })}
+            <text className="product-share-total" x="64" y="63" textAnchor="middle">{compactFormatter.format(total)}</text>
+            <text className="product-share-caption" x="64" y="78" textAnchor="middle">succeeded</text>
+          </svg>
+          <ul className="product-share-legend">
+            {shares.map(([code, count]) => <li key={code}>
+              <i className="legend-dot" style={{ background: serviceColor(code) }} />
+              <span>{serviceLabel(code, products)}</span>
+              <strong title={`${numberFormatter.format(count)} succeeded generations`}>{percentage.format(count / total)}</strong>
+            </li>)}
+          </ul>
+        </div>
+        <div className="kpi-footer"><span className="kpi-detail">Succeeded only · Selected window</span></div>
+      </>}
+  </article>;
+}

@@ -6277,3 +6277,13 @@ button:disabled {
 
 .usage-service-chart .chart-cursor-tooltip { position: absolute; margin: 0; padding: 10px; max-width: calc(100% - 16px); pointer-events: none; z-index: 2; box-shadow: 0 4px 18px #00000018; font-size: 11px; }
 .usage-service-chart .chart-cursor-tooltip .chart-inspector-services { margin-top: 8px; gap: 4px 10px; }
+
+.product-share-card .kpi-label { margin: 0; }
+.product-share-body { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.product-share-donut { width: 112px; height: 112px; flex: 0 0 112px; }
+.product-share-total { fill: var(--ink, #1f2937); font-size: 20px; font-weight: 700; }
+.product-share-caption { fill: var(--muted, #64748b); font-size: 10px; }
+.product-share-legend { list-style: none; padding: 0; margin: 0; flex: 1 1 120px; display: grid; gap: 6px; font-size: 11px; }
+.product-share-legend li { display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 6px; }
+.product-share-legend .legend-dot { width: 7px; height: 7px; border-radius: 50%; }
+.product-share-legend strong { font-variant-numeric: tabular-nums; }

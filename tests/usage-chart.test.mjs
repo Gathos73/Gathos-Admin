@@ -206,3 +206,35 @@ test('cursor tooltips follow the pointer and flip inside the chart edges', () =>
   }
   assert.ok(!render().includes('<title>'));
 });
+
+test('product share donut uses succeeded breakdowns, hides zero shares, and ignores future intervals', () => {
+  const html = renderToStaticMarkup(React.createElement(exports.ProductShareCard, {
+    sampledAt: props.sampledAt, products: [{ code: 'image', name: 'Image Generation' }, { code: 'tts', name: 'Text to Speech' }],
+    series: [
+      { date: start, total: 10, image: 6, tts: 4, video: 0 },
+      { date: '2026-09-25T08:10:00Z', total: 10, image: 9, tts: 1, video: 0 },
+      { date: '2026-09-25T08:20:00Z', total: 100, image: 0, tts: 0, video: 100 },
+    ],
+  }));
+  assert.match(html, /Image Generation: 75%/);
+  assert.match(html, /Text to Speech: 25%/);
+  assert.match(html, /20 succeeded generations/);
+  assert.equal((html.match(/data-product=/g) ?? []).length, 2);
+  assert.ok(!html.includes('data-product="video"'));
+  const segments = [...html.matchAll(/stroke-dasharray="([^ ]+) ([^"]+)" stroke-dashoffset="([^"]+)"/g)];
+  const circumference = 2 * Math.PI * 44;
+  assert.ok(Math.abs(Number(segments[0][1]) + Number(segments[1][1]) - circumference) < 1e-8);
+  assert.equal(Number(segments[1][3]), -Number(segments[0][1]));
+  assert.ok(!/NaN|Infinity/.test(html));
+});
+
+test('product share handles empty, loading, and single-product selections', () => {
+  const renderShare = (overrides = {}) => renderToStaticMarkup(React.createElement(exports.ProductShareCard, {
+    series: [], sampledAt: props.sampledAt, products: [], ...overrides,
+  }));
+  assert.match(renderShare(), /No succeeded generations in this window/);
+  assert.match(renderShare({ loading: true }), /Loading product share/);
+  const single = renderShare({ series: [{ date: start, total: 2, image: 2 }] });
+  assert.match(single, /100%/);
+  assert.equal((single.match(/data-product=/g) ?? []).length, 1);
+});

@@ -17,11 +17,10 @@ import {
   SparklesIcon,
   UsersIcon,
   CloseIcon,
-  VelocityIcon,
   ProductIcon,
 } from "@/components/icons";
 
-import { UsageChart, UsageWindow, ServiceStatusChart, serviceColor, formatTimestamp, serviceLabel } from "@/components/usage-chart";
+import { UsageChart, UsageWindow, ProductShareCard, ServiceStatusChart, serviceColor, formatTimestamp, serviceLabel } from "@/components/usage-chart";
 
 // Product badges configuration
 const PRODUCT_COLORS: Record<string, { bg: string; text: string; dot: string; label: string }> = {
@@ -429,24 +428,6 @@ export function DashboardOverview() {
 
         <div className="kpi-card">
           <div className="kpi-top">
-            <span className="kpi-label">Peak Velocity</span>
-            <span className="kpi-icon-wrap is-accent">
-              <VelocityIcon size={18} />
-            </span>
-          </div>
-          <div className="kpi-value">
-            {loadingTimeline ? "…" : (timeline?.peak_count ?? 0).toLocaleString()}
-          </div>
-          <div className="kpi-footer">
-            <span className="kpi-badge is-accent">
-              {timeWindow === "current_window" ? "Per 10m bin" : timeWindow === "24h" ? "Per hour" : "Per 6h bin"}
-            </span>
-            <span className="kpi-detail">Max generation burst</span>
-          </div>
-        </div>
-
-        <div className="kpi-card">
-          <div className="kpi-top">
             <span className="kpi-label">Active Users</span>
             <span className="kpi-icon-wrap">
               <UsersIcon size={18} />
@@ -478,6 +459,8 @@ export function DashboardOverview() {
             <span className="kpi-detail">Largest throughput share</span>
           </div>
         </div>
+        <ProductShareCard series={chartSeries} sampledAt={sampledAt}
+          products={availableProducts.filter((product) => product.code !== "all")} loading={loadingTimeline} />
       </section>
 
       {/* ── LIVE GENERATION GRAPH ── */}
