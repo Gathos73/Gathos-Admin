@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  CredentialSession, gpuDraft, matchesGpuWrite, newService, prepareGpuWrite, SERVICE_TYPES, validateGpuDraft,
+  CredentialSession, gpuDraft, gpuDraftIssues, matchesGpuWrite, newService, prepareGpuWrite, SERVICE_TYPES, validateGpuDraft,
 } from '../lib/compute-registry.ts';
 
 const credentialId = '00000000-0000-4000-8000-000000000001';
@@ -95,4 +95,33 @@ test('new GPU body carries only encrypted credential references after credential
   assert.equal(body.collector.credential_ref, credentialId);
   assert.equal(JSON.stringify(body).includes('collector-plaintext-test'), false);
   assert.equal('credential' in body.services[0], false);
+});
+
+
+test('submit reports all constraints and prevents writes for malformed encoded paths and pool conflicts', async () => {
+  const draft = gpuDraft(record());
+  draft.name = '';
+  draft.vram = '0';
+  draft.collector.base_url = 'https://collector.test/%252e%252e/private';
+  draft.services[0].health_path = '/%252e%252e/health';
+  draft.services.push({ ...draft.services[0], service_id: undefined, model_id: 'different' });
+  const issues = gpuDraftIssues(draft);
+  for (const expected of ['GPU name', 'VRAM', 'Collector URL', 'absolute health path', 'same model ID']) {
+    assert.ok(issues.some((issue) => issue.includes(expected)), expected);
+  }
+  let writes = 0;
+  await assert.rejects(prepareGpuWrite(draft, async () => { writes++; return credentialId; }));
+  assert.equal(writes, 0);
+});
+
+test('validation accepts base URL prefixes and blocks overlong values and disabling an occupied GPU', () => {
+  const source = record();
+  const draft = gpuDraft(source);
+  draft.collector.base_url = 'https://collector.test/collector';
+  assert.deepEqual(gpuDraftIssues(draft), []);
+  draft.services[0].model_revision = 'x'.repeat(161);
+  draft.desired_state = 'disabled';
+  const issues = gpuDraftIssues(draft, { ...source, reservation: { state: 'running' } });
+  assert.ok(issues.some((issue) => issue.includes('model revision')));
+  assert.ok(issues.some((issue) => issue.includes('reservation')));
 });

@@ -50,7 +50,7 @@ export type ResourceMetrics = {
   devices: { name: string; hardware_uuid: string; utilization_percent: number | null; memory_used_mib: number | null; memory_total_mib: number | null; memory_used_percent: number | null; temperature_celsius: number | null; power_watts: number | null }[];
 };
 export type GpuReading = {
-  health: "healthy" | "degraded" | "stale" | "unavailable" | "identity_mismatch";
+  health: "pending" | "healthy" | "degraded" | "stale" | "unavailable" | "identity_mismatch";
   sampled_at: string | null; metrics: ResourceMetrics | null;
 };
 export type MonitoredGpu = GpuReading & {
@@ -313,9 +313,9 @@ export function getResourceCount(resource: ResourceKey): Promise<{ total: number
   return apiFetch(`${BACKEND_PROXY}/api/admin/resources/${resource}/count`);
 }
 
-export function getGpuHealth(signal?: AbortSignal, afterId?: string): Promise<GpuHealthSnapshot> {
+export function getGpuHealth(signal?: AbortSignal, afterId?: string, includeReadings = true): Promise<GpuHealthSnapshot> {
   return apiFetch<GpuHealthSnapshot>(
-    `${BACKEND_PROXY}/api/admin/gpu-health${afterId ? `?after_id=${encodeURIComponent(afterId)}` : ""}`,
+    `${BACKEND_PROXY}/api/admin/gpu-health?include_readings=${includeReadings}${afterId ? `&after_id=${encodeURIComponent(afterId)}` : ""}`,
     { signal },
     true,
   );

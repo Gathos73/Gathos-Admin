@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { GpuIcon, RefreshIcon } from "@/components/icons";
 import { getGpuHealth, getGpuHistory, getOverviewProducts, type GpuHealthSnapshot, type GpuHistory, type GpuReading, type MonitoredGpu } from "@/lib/api";
 
-const LABELS: Record<GpuReading["health"], string> = { healthy: "Healthy telemetry", degraded: "Partial telemetry", stale: "Stale readings", unavailable: "Collector unavailable", identity_mismatch: "Identity mismatch" };
+const LABELS: Record<GpuReading["health"], string> = { pending: "Checking collector…", healthy: "Healthy telemetry", degraded: "Partial telemetry", stale: "Stale readings", unavailable: "Collector unavailable", identity_mismatch: "Identity mismatch" };
 const RANGES = [{ label: "15 minutes", minutes: 15 }, { label: "1 hour", minutes: 60 }, { label: "24 hours", minutes: 1440 }, { label: "7 days", minutes: 10080 }];
 const time = (value: string | null) => value ? new Date(value).toLocaleString() : "No sample";
 const measurement = (value: number | null | undefined, unit = "") => value == null ? "—" : `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${unit}`;
@@ -116,6 +116,10 @@ export function GpuHealthDashboard() {
       if (initial) setLoading(true);
       try {
         if (initial || document.visibilityState === "visible") {
+          if (initial) {
+            const inventory = await getGpuHealth(controller.signal, cursor, false);
+            if (!controller.signal.aborted) setSnapshot((current) => current ?? inventory);
+          }
           const next = await getGpuHealth(controller.signal, cursor);
           if (!controller.signal.aborted) { setSnapshot(next); setError(""); }
         }
@@ -129,15 +133,16 @@ export function GpuHealthDashboard() {
   }, [cursor, version]);
   const selected = snapshot?.items.find((g) => g.gpu_id === selectedId) ?? snapshot?.items[0];
   const metrics = selected?.metrics;
+  const readingsPending = snapshot?.items.some((gpu) => gpu.health === "pending");
   function navigate(next?: string) { setSnapshot(null); setCursor(next); }
   return <div className="gpu-health-page monitor-page">
-    <header className="gpu-health-hero"><div className="gpu-health-heading"><span className="eyebrow-badge">Registered infrastructure</span><h1>GPU health</h1><p>Live collector readings across Image, Video, TTS and Music services.</p></div>
+    <header className="gpu-health-hero"><div className="gpu-health-heading"><span className="eyebrow-badge">Registered infrastructure</span><h1>GPU health</h1><p>Live collector readings across registered product services.</p></div>
       <div className="gpu-health-actions"><Link href="/gpus" className="button button--secondary">Manage GPUs</Link><button className="button button--secondary" type="button" disabled={loading} onClick={() => setVersion((v) => v + 1)}><RefreshIcon size={15} />{loading ? "Refreshing…" : "Refresh"}</button></div></header>
     {error && <p className="compute-notice compute-notice--error" role="alert">{snapshot ? "Refresh failed. Showing the last available readings. " : "Unable to load GPU monitoring. "}{error}</p>}
     {loading && !snapshot ? <p className="empty-state" role="status">Loading registered GPU collectors…</p> : snapshot && <>
-      <section className="gpu-metric-grid" aria-label="Registry overview"><Metric label="Registered GPUs" value={String(snapshot.total)} detail="Includes disabled and draining GPUs" /><Metric label="Fresh healthy telemetry" value={error ? "—" : String(snapshot.items.filter((g) => g.health === "healthy").length)} detail="On this page" /><Metric label="Needs attention" value={error ? "—" : String(snapshot.items.filter((g) => g.health !== "healthy").length)} detail="On this page" /><Metric label="Reserved GPUs" value={String(snapshot.items.filter((g) => g.reservation_state).length)} detail="On this page · shared across products" /></section>
+      <section className="gpu-metric-grid" aria-label="Registry overview"><Metric label="Registered GPUs" value={String(snapshot.total)} detail="Includes disabled and draining GPUs" /><Metric label="Fresh healthy telemetry" value={error || readingsPending ? "—" : String(snapshot.items.filter((g) => g.health === "healthy").length)} detail="On this page" /><Metric label="Needs attention" value={error || readingsPending ? "—" : String(snapshot.items.filter((g) => g.health !== "healthy" && g.health !== "pending").length)} detail="On this page" /><Metric label="Reserved GPUs" value={String(snapshot.items.filter((g) => g.reservation_state).length)} detail="On this page · shared across products" /></section>
       {!snapshot.total ? <div className="gpu-empty-state"><GpuIcon /><h2>No GPUs registered</h2><p>Add a GPU with its collector to start monitoring.</p><Link className="button button--primary" href="/gpus/new">Add GPU</Link></div> : <>
-        <section className="gpu-panel"><div className="compute-section-heading"><h2>GPU inventory</h2><span>Last successful refresh: {time(snapshot.observed_at)}</span></div>
+        <section className="gpu-panel"><div className="compute-section-heading"><h2>GPU inventory</h2><span>{snapshot.items.some((g) => g.health === "pending") ? "Loading live readings…" : `Last successful refresh: ${time(snapshot.observed_at)}`}</span></div>
           <div className="compute-table-wrap"><table className="compute-table monitor-table"><thead><tr><th>GPU</th><th>Collector</th><th>Products</th><th>Configuration</th><th>Reservation</th><th>CPU</th><th>RAM</th></tr></thead><tbody>{snapshot.items.map((g) => <tr key={g.gpu_id} aria-selected={selected?.gpu_id === g.gpu_id}>
             <td><button className="monitor-select" type="button" onClick={() => setSelectedId(g.gpu_id)} aria-pressed={selected?.gpu_id === g.gpu_id}>{g.name}</button><small>{g.gpu_model || g.server_id}</small></td><td><span className={`monitor-state monitor-state--${error ? "stale" : g.health}`}>{error ? "Last reading" : LABELS[g.health]}</span></td><td>{g.services.map((s) => productNames[s.service_type === "image_to_image" ? "image2image" : s.service_type] ?? s.service_type).join(", ") || "No services"}</td><td>{g.desired_state}</td><td>{g.reservation_state || "Unreserved"}</td><td>{measurement(g.metrics?.cpu_percent, "%")}</td><td>{measurement(g.metrics?.memory.used_percent, "%")}</td>
           </tr>)}</tbody></table></div>
@@ -145,7 +150,7 @@ export function GpuHealthDashboard() {
         </section>
         {selected && <section aria-label={`${selected.name} resources`} className="monitor-detail">
           <div className="compute-section-heading"><div><h2>{selected.name}</h2><p>Collector {selected.server_id} · Sampled {time(selected.sampled_at)}</p></div><Link href={`/gpus/${selected.gpu_id}`} className="button button--secondary">GPU configuration</Link></div>
-          {selected.health !== "healthy" && <p className="compute-notice">{selected.health === "identity_mismatch" ? "Collector server ID or hardware UUID does not match this GPU. Verify the registration before trusting its measurements." : selected.health === "unavailable" ? "The collector could not be read. Check its address, credentials and availability." : selected.health === "stale" ? "These are old readings. The collector is not providing fresh samples." : "Some resource measurements are unavailable. Missing values are shown as —."}</p>}
+          {selected.health !== "healthy" && selected.health !== "pending" && <p className="compute-notice">{selected.health === "identity_mismatch" ? "Collector server ID or hardware UUID does not match this GPU. Verify the registration before trusting its measurements." : selected.health === "unavailable" ? "The collector could not be read. Check its address, credentials and availability." : selected.health === "stale" ? "These are old readings. The collector is not providing fresh samples." : "Some resource measurements are unavailable. Missing values are shown as —."}</p>}
           {!selected.hardware_uuid && <p className="compute-footer-note">Hardware identity is not configured. Device readings below cover all GPUs reported by this server’s collector.</p>}
           {metrics && <><div className="gpu-metric-grid"><Metric label="CPU utilization" value={measurement(metrics.cpu_percent, "%")} /><Metric label="RAM usage" value={measurement(metrics.memory.used_percent, "%")} detail={`${bytes(metrics.memory.used_bytes)} / ${bytes(metrics.memory.total_bytes)}`} /><Metric label="Network receive" value={bytes(metrics.network.bytes_received_per_second) + "/s"} /><Metric label="Network send" value={bytes(metrics.network.bytes_sent_per_second) + "/s"} /></div>
             <div className="monitor-device-grid">{metrics.devices.map((d) => <article className="gpu-panel" key={d.hardware_uuid}><h3>{d.name}</h3><p className="monitor-uuid">{d.hardware_uuid}</p><dl className="gpu-detail-list"><div><dt>GPU utilization</dt><dd>{measurement(d.utilization_percent, "%")}</dd></div><div><dt>VRAM</dt><dd>{measurement(d.memory_used_mib, " MiB")} / {measurement(d.memory_total_mib, " MiB")}</dd></div><div><dt>Temperature</dt><dd>{measurement(d.temperature_celsius, " °C")}</dd></div><div><dt>Power</dt><dd>{measurement(d.power_watts, " W")}</dd></div></dl></article>)}</div>
@@ -153,7 +158,7 @@ export function GpuHealthDashboard() {
             <div className="gpu-panel"><h3>System resources</h3><dl className="gpu-detail-list"><div><dt>Uptime</dt><dd>{measurement(metrics.uptime_seconds == null ? null : metrics.uptime_seconds / 3600, " hours")}</dd></div><div><dt>Swap</dt><dd>{bytes(metrics.swap.used_bytes)} / {bytes(metrics.swap.total_bytes)}</dd></div>{metrics.disks.map((disk) => <div key={disk.path}><dt>Disk {disk.path}</dt><dd>{measurement(disk.used_percent, "%")} · {bytes(disk.used_bytes)} / {bytes(disk.total_bytes)}</dd></div>)}</dl></div>
           </>}
           <div className="compute-tags">{selected.services.map((s) => <span key={s.service_id}>{productNames[s.service_type === "image_to_image" ? "image2image" : s.service_type] ?? s.service_type} · {s.desired_state}</span>)}</div>
-          <History key={`${selected.gpu_id}:${selected.revision}`} gpu={selected} />
+          {selected.health !== "pending" && <History key={`${selected.gpu_id}:${selected.revision}`} gpu={selected} />}
         </section>}
       </>}
       <p className="gpu-refresh-note">Live readings refresh every 15 seconds while this tab is visible. Collector health describes resource telemetry; model readiness is checked separately when scheduling jobs.</p>

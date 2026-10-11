@@ -81,11 +81,20 @@ export function serviceWrite(service: ServiceWrite): ServiceWrite {
   };
 }
 
+function plainPath(raw: string): boolean {
+  let decoded = raw;
+  try { for (let i = 0; i < 4; i++) decoded = decodeURIComponent(decoded); } catch { return false; }
+  return raw.startsWith("/") && !/[?#%\\\x00-\x1f]/.test(decoded) && !decoded.includes("//")
+    && !decoded.split("/").some((part) => part === "." || part === "..");
+}
+
 function plainEndpoint(raw: string): boolean {
   try {
     const parsed = new URL(raw);
+    // Inspect the original path: URL normalizes traversal segments away.
+    const path = raw.replace(/^https?:\/\/[^/]+/, "") || "/";
     return /^https?:\/\//.test(raw) && !parsed.username && !parsed.password && !parsed.search && !parsed.hash
-      && !/[\s\\]/.test(raw);
+      && !/[\s\\]/.test(raw) && plainPath(path);
   } catch { return false; }
 }
 
@@ -98,24 +107,49 @@ function credentialError(value: CredentialDraft, required: boolean): string | nu
   return null;
 }
 
-export function validateGpuDraft(draft: GpuDraft): string | null {
-  if (!draft.name.trim()) return "Enter a GPU name.";
-  if (!plainEndpoint(draft.collector.base_url.trim())) return "Enter an HTTP(S) collector URL without embedded credentials, query parameters or fragments.";
-  if (!draft.collector.server_id.trim()) return "Enter the collector server ID.";
-  if (draft.vram && (!Number.isSafeInteger(Number(draft.vram)) || Number(draft.vram) < 1)) return "VRAM must be a positive whole number in MiB.";
+export function gpuDraftIssues(draft: GpuDraft, record?: RegisteredGpu): string[] {
+  const issues: string[] = [];
+  function text(value: string | null | undefined, label: string, max: number, required = false) {
+    if (required && !value?.trim()) issues.push(`${label}: enter a value.`);
+    if ((value?.trim().length ?? 0) > max) issues.push(`${label}: use at most ${max} characters.`);
+  }
+  text(draft.name, "GPU name", 160, true);
+  text(draft.host_ref, "Provider / host reference", 255);
+  text(draft.hardware_uuid, "Hardware UUID", 255);
+  text(draft.gpu_model, "GPU model", 160);
+  text(draft.collector.base_url, "Collector URL", 2048);
+  if (!plainEndpoint(draft.collector.base_url.trim())) issues.push("Collector URL: enter an HTTP(S) URL without credentials, query, fragment or path traversal.");
+  text(draft.collector.server_id, "Collector server ID", 255, true);
+  if (draft.vram && (!Number.isSafeInteger(Number(draft.vram)) || Number(draft.vram) < 1)) issues.push("VRAM must be a positive whole number in MiB.");
   const collectorError = credentialError(draft.collector.credential, true);
-  if (collectorError) return `Collector: ${collectorError}`;
-  if (!draft.services.length || draft.services.length > 100) return "A GPU needs between one and 100 services.";
+  if (collectorError) issues.push(`Collector: ${collectorError}`);
+  if (!draft.services.length || draft.services.length > 100) issues.push("A GPU needs between one and 100 services.");
+  const pools = new Map<string, string>();
+  const ids = new Set<string>();
   for (const [index, service] of draft.services.entries()) {
     const label = `Service ${index + 1}`;
-    if (!service.model_id.trim() || !service.model_revision.trim()) return `${label}: enter the model ID and revision.`;
-    if (!plainEndpoint(service.base_url.trim())) return `${label}: enter an HTTP(S) service URL without embedded credentials, query parameters or fragments.`;
-    if (!/^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$/.test(service.pool_key.trim())) return `${label}: enter a valid execution pool.`;
-    if (!service.health_path.startsWith("/") || /[?#\\]/.test(service.health_path)) return `${label}: enter an absolute health path, such as /health.`;
+    text(service.model_id, `${label} model ID`, 160, true);
+    text(service.model_revision, `${label} model revision`, 160, true);
+    text(service.base_url, `${label} URL`, 2048);
+    if (!plainEndpoint(service.base_url.trim())) issues.push(`${label}: enter an HTTP(S) service URL without credentials, query, fragment or path traversal.`);
+    if (service.pool_key.trim().length > 100 || !/^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$/.test(service.pool_key.trim())) issues.push(`${label}: execution pool must be 1–100 characters, starting with a letter or digit; use letters, digits, _, ., :, / or -.`);
+    if (service.health_path.trim().length > 255 || !plainPath(service.health_path.trim())) issues.push(`${label}: enter an absolute health path without traversal, query or fragment, such as /health.`);
+    if (service.adapter !== SERVICE_TYPES[service.service_type]?.adapter) issues.push(`${label}: adapter must match the product type.`);
     const error = credentialError(service.credential, false);
-    if (error) return `${label}: ${error}`;
+    if (error) issues.push(`${label}: ${error}`);
+    const key = `${service.service_type}:${service.pool_key.trim()}`;
+    const model = JSON.stringify([service.adapter, service.model_id.trim(), service.model_revision.trim()]);
+    if (pools.has(key) && pools.get(key) !== model) issues.push(`${label}: services in the same product pool must use the same model ID, revision and adapter.`);
+    pools.set(key, model);
+    if (service.service_id && ids.has(service.service_id)) issues.push(`${label}: service IDs must be unique.`);
+    if (service.service_id) ids.add(service.service_id);
   }
-  return null;
+  if (record?.reservation && ["disabled", "retired"].includes(draft.desired_state)) issues.push("Drain the GPU and wait for its reservation to be released before disabling or retiring it.");
+  return issues;
+}
+
+export function validateGpuDraft(draft: GpuDraft): string | null {
+  return gpuDraftIssues(draft)[0] ?? null;
 }
 
 export async function prepareGpuWrite(
@@ -179,6 +213,9 @@ export function computeError(error: unknown): string {
     pool_model_mismatch: "This execution pool already uses a different model or revision. Use the matching model or choose a new pool.",
     compute_endpoint_host_not_allowed: "This endpoint is outside the backend’s optional COMPUTE_ALLOWED_NETWORKS restriction.",
     compute_encryption_not_configured: "The backend registry encryption key must be configured before saving credentials.",
+    unknown_credential_ref: "A saved credential could not be found. Check its ID or enter new credentials.",
+    hardware_identity_immutable: "The hardware UUID cannot change after registration.",
+    retain_all_existing_services: "Keep all saved services; drain or disable services that are no longer needed.",
     credential_not_found: "A saved credential could not be found. Check its ID or enter new credentials.",
     gpu_identity_conflict: "A GPU with this hardware identity is already registered.",
     drain_required: "Drain this GPU or service and let its current job finish before disabling it.",
