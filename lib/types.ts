@@ -55,6 +55,8 @@ export interface ResourceField {
   placeholder?: string;
   help?: string;
   min?: number;
+  max?: number;
+  integer?: boolean;
   minLength?: number;
   maxLength?: number;
   /** Confirm another field without including this value in the request. */
