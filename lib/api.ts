@@ -50,12 +50,12 @@ export type ResourceMetrics = {
   devices: { name: string; hardware_uuid: string; utilization_percent: number | null; memory_used_mib: number | null; memory_total_mib: number | null; memory_used_percent: number | null; temperature_celsius: number | null; power_watts: number | null }[];
 };
 export type GpuReading = {
-  health: "pending" | "healthy" | "degraded" | "stale" | "unavailable" | "identity_mismatch";
+  health: "not_configured" | "pending" | "healthy" | "degraded" | "stale" | "unavailable" | "identity_mismatch";
   sampled_at: string | null; metrics: ResourceMetrics | null;
 };
 export type MonitoredGpu = GpuReading & {
   gpu_id: string; revision: number; name: string; gpu_model: string | null; hardware_uuid: string | null;
-  server_id: string; desired_state: string; reservation_state: string | null;
+  server_id: string | null; desired_state: string; reservation_state: string | null;
   services: { service_id: string; service_type: string; desired_state: string }[];
 };
 export type GpuHealthSnapshot = {

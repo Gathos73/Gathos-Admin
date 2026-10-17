@@ -178,4 +178,6 @@ retention. The selected range is fixed while paging; charts show the actual load
 sample timestamps, with gaps for missing readings. Pages contain 100 samples,
 oldest first, and **Load next 100 samples** retrieves more. History is not copied
 into Supabase. Deploy the matching backend monitoring endpoints with this admin
-version; no database migration or Redis Proxy changes are needed.
+version. Optional collector registration requires backend migration
+`0031_optional_gpu_collector` before deployment; no Redis Proxy changes are needed.
+New GPUs can skip collector setup and configure monitoring later.
