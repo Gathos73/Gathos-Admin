@@ -4,6 +4,7 @@ export type ResourceKey =
   | "webhook_events"
   | "affiliate_commissions"
   | "affiliate_withdrawals"
+  | "generation_diagnostics"
   | "generation_attempts"
   | "generation_outbox"
   | "products"

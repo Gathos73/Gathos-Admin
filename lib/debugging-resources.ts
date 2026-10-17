@@ -1,6 +1,29 @@
 import type { ResourceConfig } from "./types";
 
 export const DEBUGGING_CONFIGS = {
+  generation_diagnostics: {
+    key: "generation_diagnostics", label: "Generation errors", labelSingular: "generation diagnostic",
+    description: "Private failure history, including retries and recovered errors. Open a record for redacted call sites and correlation details. Customers see generic messages.",
+    primaryKey: "id", defaultOrder: "created_at", defaultDescending: true,
+    listDisplay: [
+      { name: "created_at", label: "Time", kind: "date", sortable: true },
+      { name: "generation_id", label: "Generation", kind: "identifier", linkPrefix: "/generations/" },
+      { name: "attempt_id", label: "Attempt", kind: "identifier", linkPrefix: "/generation-attempts/" },
+      { name: "stage", label: "Stage", kind: "text", sortable: true },
+      { name: "error_code", label: "Error code", kind: "text", sortable: true },
+      { name: "exception_type", label: "Exception", kind: "text", sortable: true },
+      { name: "message", label: "Diagnostic", kind: "text" },
+    ],
+    fields: [
+      { name: "message", label: "Diagnostic message", kind: "textarea" },
+      { name: "traceback", label: "Exception chain and call sites", kind: "textarea", nullable: true },
+      { name: "context", label: "Correlation and delivery details", kind: "json" },
+    ],
+    searchFields: [{ label: "Message", value: "message" }, { label: "Error code", value: "error_code" }, { label: "Exception", value: "exception_type" }],
+    filters: [{ name: "generation_id", label: "Generation id" }, { name: "attempt_id", label: "Attempt id" }, { name: "stage", label: "Stage" }, { name: "error_code", label: "Error code" }, { name: "fingerprint", label: "Error fingerprint" }],
+    mutations: { basePath: "/debugging/generation_diagnostics" },
+    canCreate: false, canEdit: false, canDelete: false, canBulkDelete: false,
+  },
   checkout_sessions: {
     key: "checkout_sessions", label: "Checkout sessions", labelSingular: "checkout session",
     description: "Inspect checkout sessions and edit diagnostic notes.",

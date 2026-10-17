@@ -330,6 +330,12 @@ export function ResourceRecordPage({
       </nav>
 
       {resourceKey === "plans" && record && mode === "view" ? <PlanBillingActions plan={record} onChanged={handleInlineChanged} onRefresh={() => { clearRequestCache(); setRefreshVersion((version) => version + 1); }} /> : null}
+      {record && mode === "view" && resourceKey === "generation_diagnostics" ? (
+        <p>
+          <Link href={`/generations/${encodeURIComponent(String(record.generation_id))}`}>View generation</Link>
+          {record.attempt_id ? <> · <Link href={`/generation-attempts/${encodeURIComponent(String(record.attempt_id))}`}>View attempt</Link></> : null}
+        </p>
+      ) : null}
       <header className="record-page-header">
         <div>
           <p className="resource-eyebrow">{mode === "edit" ? "Change record" : "Record detail"}</p>
@@ -341,6 +347,12 @@ export function ResourceRecordPage({
           </p>
         </div>
         <div className="record-page-actions">
+          {record && mode === "view" && ["generations", "generation_attempts", "generation_outbox"].includes(resourceKey) ? (
+            <Link className="button button--secondary" href={`/generation-diagnostics?filter_by=generation_id&filter_value=${encodeURIComponent(String(resourceKey === "generations" ? record.id : record.generation_id))}`}>
+              <AlertIcon size={15} />
+              View error logs
+            </Link>
+          ) : null}
           <Link className="button button--secondary" href={listPath}>
             Back to {config.label.toLowerCase()}
           </Link>

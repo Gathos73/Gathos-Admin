@@ -545,6 +545,7 @@ export const RESOURCE_SLUGS: Record<string, ResourceKey> = {
   "webhook-events": "webhook_events",
   "affiliate-commissions": "affiliate_commissions",
   "affiliate-withdrawals": "affiliate_withdrawals",
+  "generation-diagnostics": "generation_diagnostics",
   "generation-attempts": "generation_attempts",
   "generation-outbox": "generation_outbox",
 
