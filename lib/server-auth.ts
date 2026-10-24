@@ -91,17 +91,10 @@ export const getAdminAccess = cache(async (): Promise<AdminAccess> => {
   const secret = process.env.SESSION_SECRET;
   const identity = secret ? verifySession(token, secret) : null;
   if (secret && !identity) return { status: "unauthenticated" };
-  if (identity?.is_superuser === true) {
-    return { status: "authorized", email: identity.email };
-  }
-  if (identity?.is_superuser === false) {
-    return { status: "forbidden", email: identity.email };
-  }
   const cookieHeader = `${cookieName("gathos_session")}=${encodeURIComponent(token)}`;
 
-  // Sessions issued before the is_superuser claim was introduced get one
-  // compatibility check. New sessions never add a separate layout request;
-  // every admin data API still verifies current database authorization.
+  // Signed role claims can outlive logout, role changes or account suspension.
+  // Check current access once per server render; React cache shares the result.
   try {
     const response = await fetch(`${getBackendUrl()}/api/admin/check`, {
       cache: "no-store",
