@@ -1,3 +1,4 @@
+import { cookieName } from "@/lib/cookie-names";
 import "server-only";
 
 import { cache } from "react";
@@ -36,7 +37,7 @@ export async function getServerResourceList(
   resource: ResourceKey,
   query: ResourceQuery,
 ): Promise<ResourceListResponse | null> {
-  const token = (await cookies()).get("gathos_session")?.value;
+  const token = (await cookies()).get(cookieName("gathos_session"))?.value;
   if (!token) return null;
   const parameters = new URLSearchParams({
     page: String(query.page),
@@ -49,7 +50,7 @@ export async function getServerResourceList(
       `${getBackendUrl()}/api/admin/resources/${resource}?${parameters.toString()}`,
       {
         cache: "no-store",
-        headers: { cookie: `gathos_session=${encodeURIComponent(token)}` },
+        headers: { cookie: `${cookieName("gathos_session")}=${encodeURIComponent(token)}` },
         signal: AbortSignal.timeout(5_000),
       },
     );
@@ -64,14 +65,14 @@ export async function getServerResourceRecord(
   resource: ResourceKey,
   recordId: string,
 ): Promise<ResourceRecordResponse | null> {
-  const token = (await cookies()).get("gathos_session")?.value;
+  const token = (await cookies()).get(cookieName("gathos_session"))?.value;
   if (!token) return null;
   try {
     const response = await fetch(
       `${getBackendUrl()}/api/admin/resources/${resource}/${encodeURIComponent(recordId)}`,
       {
         cache: "no-store",
-        headers: { cookie: `gathos_session=${encodeURIComponent(token)}` },
+        headers: { cookie: `${cookieName("gathos_session")}=${encodeURIComponent(token)}` },
         signal: AbortSignal.timeout(15_000),
       },
     );
@@ -85,7 +86,7 @@ export async function getServerResourceRecord(
 }
 
 export const getAdminAccess = cache(async (): Promise<AdminAccess> => {
-  const token = (await cookies()).get("gathos_session")?.value;
+  const token = (await cookies()).get(cookieName("gathos_session"))?.value;
   if (!token) return { status: "unauthenticated" };
   const secret = process.env.SESSION_SECRET;
   const identity = secret ? verifySession(token, secret) : null;
@@ -96,7 +97,7 @@ export const getAdminAccess = cache(async (): Promise<AdminAccess> => {
   if (identity?.is_superuser === false) {
     return { status: "forbidden", email: identity.email };
   }
-  const cookieHeader = `gathos_session=${encodeURIComponent(token)}`;
+  const cookieHeader = `${cookieName("gathos_session")}=${encodeURIComponent(token)}`;
 
   // Sessions issued before the is_superuser claim was introduced get one
   // compatibility check. New sessions never add a separate layout request;

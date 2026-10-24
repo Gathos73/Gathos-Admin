@@ -1,0 +1,23 @@
+name: Verify frontend
+on:
+  push:
+    branches: [dev, 'codex/**']
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          SESSION_SECRET: ci-only-session-secret-not-used-by-any-server
+          BACKEND_URL: http://127.0.0.1:8000

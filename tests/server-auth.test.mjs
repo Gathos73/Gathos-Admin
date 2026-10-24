@@ -43,6 +43,7 @@ test('uses signed admin claims without a duplicate backend check', async (t) => 
     },
     'next/navigation': { redirect: () => { throw new Error('redirect'); } },
     '@/lib/session-token': { verifySession },
+    '@/lib/cookie-names': { cookieName: (name) => `${process.env.COOKIE_PREFIX || ''}${name}` },
   };
   const loaded = { exports: {} };
   new Function('require', 'module', 'exports', compiled)((id) => {
