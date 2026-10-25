@@ -86,7 +86,7 @@ test('lost PUT confirmation matches server-assigned service IDs but detects conc
 
 test('new GPU body carries only encrypted credential references after credential creation', async () => {
   const draft = gpuDraft();
-  Object.assign(draft, { name: 'New GPU', hardware_uuid: '' });
+  Object.assign(draft, { name: 'New GPU', hardware_uuid: '', collectorEnabled: true });
   Object.assign(draft.collector, { base_url: 'https://collector.test', server_id: 'server-id' });
   draft.collector.credential.apiKey = 'collector-plaintext-test';
   Object.assign(draft.services[0], { base_url: 'https://gpu.test', model_id: 'model', model_revision: 'v1' });
@@ -124,4 +124,24 @@ test('validation accepts base URL prefixes and blocks overlong values and disabl
   const issues = gpuDraftIssues(draft, { ...source, reservation: { state: 'running' } });
   assert.ok(issues.some((issue) => issue.includes('model revision')));
   assert.ok(issues.some((issue) => issue.includes('reservation')));
+});
+
+
+test('registration can skip collector and never creates its credentials', async () => {
+  const draft = gpuDraft();
+  draft.name = 'No collector';
+  Object.assign(draft.services[0], { base_url: 'https://gpu.test', model_id: 'model', model_revision: 'v1' });
+  assert.equal(draft.collectorEnabled, false);
+  assert.deepEqual(gpuDraftIssues(draft), []);
+  const resolved = [];
+  const body = await prepareGpuWrite(draft, async (value, label) => { resolved.push(label); return null; });
+  assert.equal(body.collector, null);
+  assert.equal(resolved.length, 1);
+  assert.ok(!resolved[0].endsWith('collector'));
+  const saved = { ...record(), ...body };
+  assert.equal(gpuDraft(saved).collectorEnabled, false);
+  assert.equal(matchesGpuWrite(saved, body), true);
+  assert.equal(matchesGpuWrite({ ...saved, collector: record().collector }, body), false);
+  draft.collectorEnabled = true;
+  assert.ok(gpuDraftIssues(draft).some((issue) => issue.startsWith('Collector')));
 });

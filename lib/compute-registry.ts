@@ -23,7 +23,7 @@ export type ServiceWrite = {
 export type GpuWrite = {
   name: string; host_ref: string | null; hardware_uuid: string | null;
   gpu_model: string | null; vram_mib: number | null; desired_state: ComputeState;
-  collector: CollectorWrite; services: ServiceWrite[];
+  collector: CollectorWrite | null; services: ServiceWrite[];
 };
 export type RegisteredService = ServiceWrite & { service_id: string; version: number };
 export type RegisteredGpu = Omit<GpuWrite, "services"> & {
@@ -40,6 +40,7 @@ export type CredentialDraft = { mode: "new" | "existing" | "none"; reference: st
 export type ServiceDraft = Omit<ServiceWrite, "credential_ref"> & { draftId: string; credential: CredentialDraft };
 export type GpuDraft = Omit<GpuWrite, "vram_mib" | "collector" | "services"> & {
   vram: string;
+  collectorEnabled: boolean;
   collector: Omit<CollectorWrite, "credential_ref"> & { credential: CredentialDraft };
   services: ServiceDraft[];
 };
@@ -60,9 +61,10 @@ export function gpuDraft(record?: RegisteredGpu): GpuDraft {
   return {
     name: record?.name ?? "", host_ref: record?.host_ref ?? "", hardware_uuid: record?.hardware_uuid ?? "",
     gpu_model: record?.gpu_model ?? "", vram: record?.vram_mib?.toString() ?? "", desired_state: record?.desired_state ?? "enabled",
+    collectorEnabled: Boolean(record?.collector),
     collector: {
-      base_url: record?.collector.base_url ?? "", server_id: record?.collector.server_id ?? "",
-      status_path: "/v1/status", metrics_path: "/metrics", credential: credentialDraft(record?.collector.credential_ref, true, record?.credential_labels?.[record.collector.credential_ref]),
+      base_url: record?.collector?.base_url ?? "", server_id: record?.collector?.server_id ?? "",
+      status_path: "/v1/status", metrics_path: "/metrics", credential: credentialDraft(record?.collector?.credential_ref, true, record?.credential_labels?.[record?.collector?.credential_ref ?? ""]),
     },
     services: record ? record.services.map((service) => ({
       ...serviceWrite(service), draftId: service.service_id, credential: credentialDraft(service.credential_ref, false, record.credential_labels?.[service.credential_ref ?? ""]),
@@ -117,12 +119,14 @@ export function gpuDraftIssues(draft: GpuDraft, record?: RegisteredGpu): string[
   text(draft.host_ref, "Provider / host reference", 255);
   text(draft.hardware_uuid, "Hardware UUID", 255);
   text(draft.gpu_model, "GPU model", 160);
-  text(draft.collector.base_url, "Collector URL", 2048);
-  if (!plainEndpoint(draft.collector.base_url.trim())) issues.push("Collector URL: enter an HTTP(S) URL without credentials, query, fragment or path traversal.");
-  text(draft.collector.server_id, "Collector server ID", 255, true);
   if (draft.vram && (!Number.isSafeInteger(Number(draft.vram)) || Number(draft.vram) < 1)) issues.push("VRAM must be a positive whole number in MiB.");
-  const collectorError = credentialError(draft.collector.credential, true);
-  if (collectorError) issues.push(`Collector: ${collectorError}`);
+  if (draft.collectorEnabled) {
+    text(draft.collector.base_url, "Collector URL", 2048);
+    if (!plainEndpoint(draft.collector.base_url.trim())) issues.push("Collector URL: enter an HTTP(S) URL without credentials, query, fragment or path traversal.");
+    text(draft.collector.server_id, "Collector server ID", 255, true);
+    const collectorError = credentialError(draft.collector.credential, true);
+    if (collectorError) issues.push(`Collector: ${collectorError}`);
+  }
   if (!draft.services.length || draft.services.length > 100) issues.push("A GPU needs between one and 100 services.");
   const pools = new Map<string, string>();
   const ids = new Set<string>();
@@ -158,8 +162,8 @@ export async function prepareGpuWrite(
 ): Promise<GpuWrite> {
   const error = validateGpuDraft(draft);
   if (error) throw new Error(error);
-  const collectorRef = await resolve(draft.collector.credential, `${draft.name} collector`.slice(0, 160));
-  if (!collectorRef) throw new Error("Collector credentials are required.");
+  const collectorRef = draft.collectorEnabled ? await resolve(draft.collector.credential, `${draft.name} collector`.slice(0, 160)) : null;
+  if (draft.collectorEnabled && !collectorRef) throw new Error("Collector credentials are required.");
   const services: ServiceWrite[] = [];
   for (const [index, service] of draft.services.entries()) {
     const reference = await resolve(service.credential, `${draft.name} ${SERVICE_TYPES[service.service_type].label} ${index + 1}`.slice(0, 160));
@@ -168,8 +172,8 @@ export async function prepareGpuWrite(
   return {
     name: draft.name.trim(), host_ref: draft.host_ref?.trim() || null, hardware_uuid: draft.hardware_uuid?.trim() || null,
     gpu_model: draft.gpu_model?.trim() || null, vram_mib: draft.vram ? Number(draft.vram) : null, desired_state: draft.desired_state,
-    collector: { base_url: draft.collector.base_url.trim().replace(/\/+$/, ""), server_id: draft.collector.server_id.trim(),
-      status_path: "/v1/status", metrics_path: "/metrics", credential_ref: collectorRef }, services,
+    collector: collectorRef ? { base_url: draft.collector.base_url.trim().replace(/\/+$/, ""), server_id: draft.collector.server_id.trim(),
+      status_path: "/v1/status", metrics_path: "/metrics", credential_ref: collectorRef } : null, services,
   };
 }
 
@@ -196,7 +200,8 @@ export function matchesGpuWrite(record: RegisteredGpu, expected: GpuWrite): bool
   for (const field of ["name", "host_ref", "hardware_uuid", "gpu_model", "vram_mib", "desired_state"] as const) {
     if (record[field] !== expected[field]) return false;
   }
-  if (Object.entries(expected.collector).some(([key, value]) => record.collector[key as keyof CollectorWrite] !== value)) return false;
+  if (Boolean(expected.collector) !== Boolean(record.collector)) return false;
+  if (expected.collector && Object.entries(expected.collector).some(([key, value]) => record.collector?.[key as keyof CollectorWrite] !== value)) return false;
   const remaining = record.services.map(serviceWrite);
   for (const incoming of expected.services) {
     const found = remaining.findIndex((item) => Object.entries(incoming).every(([key, value]) => item[key as keyof ServiceWrite] === value));

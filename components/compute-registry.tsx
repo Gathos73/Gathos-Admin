@@ -51,7 +51,7 @@ export function ComputeRegistry() {
       </div>
     </header>
     {error && <div className="compute-notice compute-notice--error" role="alert"><AlertIcon size={18} />{error}</div>}
-    <div className="compute-notice"><GpuIcon size={18} /><span>Each GPU has a collector and one or more services. Scheduling follows the GPU’s configured reservation policy. Enabled services become eligible once their health checks pass.</span></div>
+    <div className="compute-notice"><GpuIcon size={18} /><span>Each GPU has one or more services and an optional monitoring collector. Scheduling follows the GPU’s configured reservation policy. Enabled services become eligible once their health checks pass.</span></div>
     <section className="compute-inventory" aria-busy={loading} aria-label="Registered GPUs">
       <div className="compute-section-heading"><h2>GPU inventory</h2><span>{page ? `${page.items.length} on this page` : "Loading…"}</span></div>
       {loading ? <div className="empty-state" role="status">Loading GPU inventory…</div> : page?.items.length ? <div className="compute-table-wrap">
@@ -64,7 +64,7 @@ export function ComputeRegistry() {
             <td><Link className="button button--secondary" href={`/gpus/${gpu.gpu_id}`} aria-label={`Manage ${gpu.name}`}>Manage<ChevronRightIcon size={14} /></Link></td>
           </tr>)}</tbody>
         </table>
-      </div> : <div className="empty-state"><GpuIcon /><strong>{error ? "Inventory unavailable" : "No GPUs registered"}</strong><span>{error ? "Refresh to try again." : "Add a GPU with its collector and first ML service to get started."}</span>{!error && <Link className="button button--primary" href="/gpus/new"><PlusIcon size={16} />Add your first GPU</Link>}</div>}
+      </div> : <div className="empty-state"><GpuIcon /><strong>{error ? "Inventory unavailable" : "No GPUs registered"}</strong><span>{error ? "Refresh to try again." : "Add a GPU and its first ML service to get started."}</span>{!error && <Link className="button button--primary" href="/gpus/new"><PlusIcon size={16} />Add your first GPU</Link>}</div>}
       {(history.length > 0 || page?.next_cursor) && <div className="compute-pagination">
         <button className="button button--secondary" disabled={loading || !history.length} type="button" onClick={() => { setCursor(history.at(-1)); setHistory((items) => items.slice(0, -1)); }}><ChevronLeftIcon size={16} />Previous</button>
         <span>Page {history.length + 1}</span>
@@ -204,7 +204,7 @@ function GpuForm({ record, onSaved, onReload }: { record?: RegisteredGpu; onSave
 
   return <>
     {record?.reservation && <div className="compute-notice"><GpuIcon size={18} /><span>This GPU has a <strong>{record.reservation.state}</strong> reservation. Existing jobs keep their assigned service version. Collector settings can change once the reservation is released.</span></div>}
-    {!record && <div className="compute-notice"><span>Have the collector base URL, server ID and authentication ready, plus each service’s base URL, exact model ID and revision. Required fields are checked together when you register.</span></div>}
+    {!record && <div className="compute-notice"><span>Have each service’s base URL, exact model ID and revision ready. Collector monitoring is optional and can be configured later. Required fields are checked together when you register.</span></div>}
     {record && <p className="compute-footer-note">Permanent deletion is unavailable. The registry retains configuration and execution history; drain and disable this GPU to remove it from scheduling.</p>}
     {retired && <div className="compute-notice">This GPU is retired. Its configuration is kept for reference.</div>}
     <form noValidate className="record-form compute-form" onSubmit={(event) => void save(event)}>
@@ -218,20 +218,23 @@ function GpuForm({ record, onSaved, onReload }: { record?: RegisteredGpu; onSave
           <div className="form-grid">
             <Field label="GPU name" help="A friendly inventory label, for example GPU server 01; it does not need to match the model ID."><input required maxLength={160} value={draft.name} placeholder="GPU server 01" onChange={(event) => change("name", event.target.value)} /></Field>
             <Field label="Provider / host reference" help="Optional provider instance ID or server label."><input maxLength={255} value={draft.host_ref ?? ""} onChange={(event) => change("host_ref", event.target.value)} /></Field>
-            <Field label="Hardware UUID (optional)" help="If available, enter the GPU UUID reported by the collector. Leave blank if your provider does not expose it; the collector server ID is still required."><input disabled={Boolean(record)} maxLength={255} value={draft.hardware_uuid ?? ""} placeholder="GPU-… or leave blank" onChange={(event) => change("hardware_uuid", event.target.value)} /></Field>
+            <Field label="Hardware UUID (optional)" help="If available, enter the GPU UUID reported by the collector. Leave blank if your provider does not expose it."><input disabled={Boolean(record)} maxLength={255} value={draft.hardware_uuid ?? ""} placeholder="GPU-… or leave blank" onChange={(event) => change("hardware_uuid", event.target.value)} /></Field>
             <Field label="GPU model" help="Optional hardware name, for example NVIDIA RTX 4090."><input maxLength={160} value={draft.gpu_model ?? ""} placeholder="e.g. NVIDIA RTX 4090" onChange={(event) => change("gpu_model", event.target.value)} /></Field>
             <Field label="VRAM (MiB)" help="Optional memory capacity in MiB. Example: 24 GiB = 24576 MiB."><input type="number" min={1} step={1} value={draft.vram} placeholder="24576" onChange={(event) => change("vram", event.target.value)} /></Field>
             <Field label="Status" help="Enabled accepts jobs after readiness checks. Draining stops new jobs while current work finishes. Disable once idle."><StateSelect value={draft.desired_state} onChange={(value) => change("desired_state", value)} /></Field>
           </div>
         </section>
         <section className="compute-form-section">
-          <div className="compute-section-heading"><div><p className="section-kicker">Monitoring</p><h2>Collector</h2></div><span>Required for every GPU</span></div>
+          <div className="compute-section-heading"><div><p className="section-kicker">Monitoring</p><h2>Collector</h2></div><span>Optional · configure now or later</span></div>
           <fieldset disabled={Boolean(record?.reservation)}>
+            <label className="form-field"><span><input type="checkbox" checked={draft.collectorEnabled} onChange={(event) => change("collectorEnabled", event.target.checked)} /> Configure collector</span><span className="form-help">Enable resource monitoring with a collector. Without one, services can still run; CPU, RAM and GPU telemetry will be unavailable.</span></label>
+            {draft.collectorEnabled && <>
             <div className="form-grid">
               <Field label="Collector URL" help="The monitoring API base URL, for example https://gpu.example.com/collector. We append /v1/status; do not include that suffix."><input type="url" required maxLength={2048} value={draft.collector.base_url} placeholder="https://gpu.example.com/collector" onChange={(event) => change("collector", { ...draft.collector, base_url: event.target.value })} /></Field>
               <Field label="Collector server ID" help="Copy COLLECTOR_SERVER_ID from the GPU server, for example gpu-server-01. It must match the collector’s reported server_id exactly."><input required maxLength={255} value={draft.collector.server_id} placeholder="gpu-server-01" onChange={(event) => change("collector", { ...draft.collector, server_id: event.target.value })} /></Field>
             </div>
             <CredentialFields required value={draft.collector.credential} onChange={(value) => change("collector", { ...draft.collector, credential: value })} />
+            </>}
           </fieldset>
         </section>
         <section className="compute-form-section">
@@ -285,7 +288,7 @@ export function ComputeGpuPage({ gpuId }: { gpuId?: string }) {
   }, [gpuId, reloadIndex]);
   return <div className="compute-page">
     <Link className="compute-back" href="/gpus"><ChevronLeftIcon size={16} />GPUs &amp; Services</Link>
-    <header className="record-page-header"><div><p className="section-kicker">Compute infrastructure</p><h1>{gpuId ? currentRecord?.name ?? "GPU configuration" : "Add GPU"}</h1><p>{gpuId ? "Manage this server’s collector and ML services." : "Connect a GPU server, its collector and the model services it runs."}</p></div></header>
+    <header className="record-page-header"><div><p className="section-kicker">Compute infrastructure</p><h1>{gpuId ? currentRecord?.name ?? "GPU configuration" : "Add GPU"}</h1><p>{gpuId ? "Manage this server’s collector and ML services." : "Connect a GPU server and its model services, with optional collector monitoring."}</p></div></header>
     {error && <div className="compute-notice compute-notice--error" role="alert">{error}<button className="button button--secondary" type="button" onClick={onReload}>Reload</button></div>}
     {loading ? <div className="empty-state" role="status">Loading GPU configuration…</div> : (!gpuId || currentRecord) && <GpuForm key={`${currentRecord?.etag ?? "new"}:${reloadIndex}`} record={currentRecord} onReload={onReload} onSaved={(saved) => {
       setRecord(saved); pushToast("GPU configuration saved. The proxy will pick up the changes automatically.", "success");

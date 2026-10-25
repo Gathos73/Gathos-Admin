@@ -1,52 +1,38 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
+import { createRequire } from 'node:module';
 import ts from 'typescript';
 
 const source = await readFile(new URL('../lib/catalog-inline-drafts.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, {
-  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
-const drafts = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+const require = createRequire(import.meta.url);
+const loaded = { exports: {} };
+new Function('module', 'exports', 'require', compiled)(loaded, loaded.exports, (name) => {
+  if (name === './api') return { listResource() { throw new Error('Draft serialization must not fetch resources'); } };
+  return require(name);
+});
+const drafts = loaded.exports;
 
-test('serializes staged plan limits without client-only keys', () => {
-  const limit = drafts.newPlanLimitDraft('local-key');
-  Object.assign(limit, {
-    code: 'video_daily',
-    limitValue: '12',
-    productIds: ['product-id'],
-    scope: 'selected_products',
-  });
+test('serializes product limits without client-only fields and preserves zero versus unlimited', () => {
+  const limit = drafts.newProductLimitDraft('local-key', 'product-id', 'video', 'Video');
+  Object.assign(limit, { fixedWindowLimit: '12', queueDepthLimit: '0', concurrencyLimit: '' });
   const result = drafts.serializePlanLimitDrafts([limit], ['product-id']);
   assert.equal(result.error, undefined);
   assert.deepEqual(result.rows, [{
-    code: 'video_daily',
-    metric: 'accepted_generations',
-    scope: 'selected_products',
-    product_ids: ['product-id'],
-    window_type: 'calendar_day',
-    window_seconds: null,
-    limit_value: 12,
+    product_id: 'product-id', fixed_window_limit: 12, queue_depth_limit: 0, concurrency_limit: null,
   }]);
 });
 
-test('rejects duplicate limits and products outside the draft plan', () => {
-  const first = drafts.newPlanLimitDraft('one');
-  Object.assign(first, { code: 'daily_limit', limitValue: '1' });
+test('rejects duplicate products, products outside the plan and invalid concurrency', () => {
+  const first = drafts.newProductLimitDraft('one', 'product-id');
   const duplicate = { ...first, draftKey: 'two' };
-  assert.match(
-    drafts.serializePlanLimitDrafts([first, duplicate], []).error,
-    /duplicated/,
-  );
-  Object.assign(duplicate, {
-    code: 'scoped_limit',
-    productIds: ['missing-product'],
-    scope: 'selected_products',
-  });
-  assert.match(
-    drafts.serializePlanLimitDrafts([duplicate], []).error,
-    /belong to the plan/,
-  );
+  assert.match(drafts.serializePlanLimitDrafts([first, duplicate], ['product-id']).error, /one limit block/);
+  assert.match(drafts.serializePlanLimitDrafts([first], []).error, /not in the plan/);
+  Object.assign(first, { concurrencyLimit: '0' });
+  assert.match(drafts.serializePlanLimitDrafts([first], ['product-id'], 1).error, /1 or more/);
 });
 
 test('serializes routes and validates route JSON and priority', () => {

@@ -60,8 +60,14 @@ function fieldPayloadValue(
   if (field.kind === "number") {
     const number = Number(raw);
     if (!Number.isFinite(number)) return { error: `${field.label} must be a number.` };
+    if (field.integer && !Number.isInteger(number)) {
+      return { error: `${field.label} must be a whole number.` };
+    }
     if (field.min !== undefined && number < field.min) {
       return { error: `${field.label} must be at least ${field.min}.` };
+    }
+    if (field.max !== undefined && number > field.max) {
+      return { error: `${field.label} must be at most ${field.max}.` };
     }
     return { value: number };
   }
@@ -304,6 +310,7 @@ export function RecordForm({
                     aria-invalid={Boolean(error)}
                     disabled={disabled}
                     min={field.min}
+                    max={field.max}
                     minLength={field.minLength}
                     maxLength={field.maxLength}
                     name={field.name}

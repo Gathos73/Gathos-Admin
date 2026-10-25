@@ -41,6 +41,7 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
+  { href: "/generation-diagnostics", label: "Generation errors", description: "Inspect private failure history and stack traces", icon: GpuIcon, keywords: "debugging errors diagnostics generations" },
   { href: "/checkout-sessions", label: "Checkout sessions", description: "View and edit checkout sessions", icon: TierIcon, keywords: "debugging payment billing checkout_sessions" },
   { href: "/checkout-invites", label: "Checkout invites", description: "View and edit checkout invites", icon: TierIcon, keywords: "debugging payment billing checkout_invites" },
   { href: "/webhook-events", label: "Payment webhooks", description: "View and edit payment webhooks", icon: TierIcon, keywords: "debugging payment billing webhook_events" },

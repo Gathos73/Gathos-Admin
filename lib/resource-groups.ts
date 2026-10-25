@@ -5,5 +5,5 @@ export const RESOURCE_GROUPS = [
   { id: "accounts", label: "Accounts & access", hrefs: ["/users", "/api-keys", "/priority-support"] },
   { id: "security", label: "Security & privacy", hrefs: ["/security-blocklist", "/meta-deletion-requests"] },
   { id: "growth", label: "Marketing & Affiliates", hrefs: ["/newsletter-subscribers", "/affiliates", "/affiliate-commissions", "/affiliate-withdrawals"] },
-  { id: "debugging", label: "Debugging", hrefs: ["/checkout-sessions", "/checkout-invites", "/webhook-events", "/generation-attempts", "/generation-outbox"] },
+  { id: "debugging", label: "Debugging", hrefs: ["/checkout-sessions", "/checkout-invites", "/webhook-events", "/generation-attempts", "/generation-diagnostics", "/generation-outbox"] },
 ];

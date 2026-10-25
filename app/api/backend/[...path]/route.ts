@@ -1,3 +1,4 @@
+import { signClientAddress } from "@/lib/client-address";
 import type { NextRequest } from "next/server";
 
 import { getBackendUrl } from "@/lib/server-auth";
@@ -47,7 +48,7 @@ function isAllowedPath(path: string[]): boolean {
 function isSameOriginMutation(request: NextRequest): boolean {
   if (SAFE_METHODS.has(request.method)) return true;
   const origin = request.headers.get("origin");
-  return origin === request.nextUrl.origin;
+  return origin === (process.env.APP_ORIGIN || request.nextUrl.origin);
 }
 
 async function readRequestBody(request: NextRequest): Promise<ArrayBuffer | undefined> {
@@ -79,7 +80,7 @@ async function readRequestBody(request: NextRequest): Promise<ArrayBuffer | unde
   return body.buffer as ArrayBuffer;
 }
 
-function requestHeaders(request: NextRequest): Headers {
+function requestHeaders(request: NextRequest, upstreamPath: string): Headers {
   const headers = new Headers(request.headers);
   for (const name of HOP_BY_HOP_HEADERS) {
     headers.delete(name);
@@ -88,6 +89,7 @@ function requestHeaders(request: NextRequest): Headers {
     headers.delete(name);
   }
   headers.set("x-gathos-client", "admin-bff");
+  signClientAddress(request.headers, headers, request.method, upstreamPath);
   return headers;
 }
 
@@ -146,7 +148,7 @@ async function forward(request: NextRequest, context: RouteContext): Promise<Res
     const upstream = await fetch(upstreamUrl, {
       body: rawBody,
       cache: "no-store",
-      headers: requestHeaders(request),
+      headers: requestHeaders(request, upstreamUrl.pathname),
       method: request.method,
       redirect: "manual",
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(30_000)]),

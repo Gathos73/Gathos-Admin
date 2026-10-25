@@ -4,6 +4,7 @@ export type ResourceKey =
   | "webhook_events"
   | "affiliate_commissions"
   | "affiliate_withdrawals"
+  | "generation_diagnostics"
   | "generation_attempts"
   | "generation_outbox"
   | "products"
@@ -55,6 +56,8 @@ export interface ResourceField {
   placeholder?: string;
   help?: string;
   min?: number;
+  max?: number;
+  integer?: boolean;
   minLength?: number;
   maxLength?: number;
   /** Confirm another field without including this value in the request. */
