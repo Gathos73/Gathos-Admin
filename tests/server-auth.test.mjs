@@ -1,10 +1,19 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
+import * as crypto from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import ts from 'typescript';
 
-import { verifySession } from '../lib/session-token.ts';
+const sessionSource = await readFile(new URL('../lib/session-token.ts', import.meta.url), 'utf8');
+const sessionCompiled = ts.transpileModule(sessionSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS },
+}).outputText;
+const sessionModule = { exports: {} };
+new Function('require', 'module', 'exports', sessionCompiled)(id => {
+  assert.equal(id, 'node:crypto'); return crypto;
+}, sessionModule, sessionModule.exports);
+const { verifySession } = sessionModule.exports;
 
 const source = await readFile(new URL('../lib/server-auth.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, {
@@ -17,7 +26,7 @@ function token(payload) {
   return Buffer.from(JSON.stringify({ data, signature })).toString('base64url');
 }
 
-test('uses signed admin claims without a duplicate backend check', async (t) => {
+test('signed admin claims cannot bypass current backend authorization', async (t) => {
   const originalSecret = process.env.SESSION_SECRET;
   process.env.SESSION_SECRET = 'test-secret';
   t.after(() => {
@@ -27,9 +36,10 @@ test('uses signed admin claims without a duplicate backend check', async (t) => 
   t.mock.method(Date, 'now', () => 150_000);
   let sessionToken;
   let calls = 0;
+  let responseBody = { authenticated: true, isAdmin: true, email: 'admin@example.com' };
   t.mock.method(globalThis, 'fetch', async () => {
     calls += 1;
-    return Response.json({ authenticated: true, isAdmin: true, email: 'legacy@example.com' });
+    return Response.json(responseBody);
   });
   const dependencies = {
     'server-only': {},
@@ -43,6 +53,7 @@ test('uses signed admin claims without a duplicate backend check', async (t) => 
     },
     'next/navigation': { redirect: () => { throw new Error('redirect'); } },
     '@/lib/session-token': { verifySession },
+    '@/lib/cookie-names': { cookieName: (name) => `${process.env.COOKIE_PREFIX || ''}${name}` },
   };
   const loaded = { exports: {} };
   new Function('require', 'module', 'exports', compiled)((id) => {
@@ -54,17 +65,24 @@ test('uses signed admin claims without a duplicate backend check', async (t) => 
   assert.deepEqual(await loaded.exports.getAdminAccess(), {
     status: 'authorized', email: 'admin@example.com',
   });
-  assert.equal(calls, 0);
+  assert.equal(calls, 1);
+
+  // Replay the exact signed cookie after logout/suspension.
+  responseBody = { authenticated: false, isAdmin: false };
+  assert.deepEqual(await loaded.exports.getAdminAccess(), { status: 'unauthenticated' });
+  assert.equal(calls, 2);
 
   sessionToken = token({ userId: 'member', email: 'member@example.com', is_superuser: false });
+  responseBody = { authenticated: true, isAdmin: false, email: 'member@example.com' };
   assert.deepEqual(await loaded.exports.getAdminAccess(), {
     status: 'forbidden', email: 'member@example.com',
   });
-  assert.equal(calls, 0);
+  assert.equal(calls, 3);
 
   sessionToken = token({ userId: 'legacy', email: 'legacy@example.com' });
+  responseBody = { authenticated: true, isAdmin: true, email: 'legacy@example.com' };
   assert.deepEqual(await loaded.exports.getAdminAccess(), {
     status: 'authorized', email: 'legacy@example.com',
   });
-  assert.equal(calls, 1);
+  assert.equal(calls, 4);
 });
