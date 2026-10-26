@@ -41,6 +41,8 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
+  { href: "/blog", label: "Blog", description: "Write, review and publish articles", icon: MailIcon, keywords: "blog posts content publishing" },
+  { href: "/seo", label: "SEO pages", description: "Edit comparison, workflow and marketing pages", icon: SearchIcon, keywords: "seo content comparisons workflow voice industry" },
   { href: "/generation-diagnostics", label: "Generation errors", description: "Inspect private failure history and stack traces", icon: GpuIcon, keywords: "debugging errors diagnostics generations" },
   { href: "/checkout-sessions", label: "Checkout sessions", description: "View and edit checkout sessions", icon: TierIcon, keywords: "debugging payment billing checkout_sessions" },
   { href: "/checkout-invites", label: "Checkout invites", description: "View and edit checkout invites", icon: TierIcon, keywords: "debugging payment billing checkout_invites" },
@@ -142,7 +144,8 @@ export function AdminShell({ children, email }: { children: ReactNode; email?: s
   const [signingOut, setSigningOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
 
-  const currentItem = NAV_ITEMS.find((item) => isActivePath(pathname, item.href));
+  const currentItem = NAV_ITEMS.find((item) => isActivePath(pathname, item.href))
+    ?? (pathname.startsWith("/content/") ? { href: "/content", label: "Content editor" } : undefined);
   const nestedRecordPage = Boolean(
     currentItem && currentItem.href !== "/" && pathname !== currentItem.href,
   );

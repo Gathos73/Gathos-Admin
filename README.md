@@ -192,3 +192,34 @@ Set server-only `COOKIE_PREFIX` to the same value as the backend (for example
 `dev_`) when environments share a parent domain. The default empty prefix
 preserves existing cookies. Keep session signing secrets separate between
 environments. The dashboard referral route also accepts `COOKIE_DOMAIN`.
+
+## Blog and SEO publishing
+
+**Blog** (`/blog`) and **SEO pages** (`/seo`) manage articles, comparisons,
+workflow pages, agent pages, alternatives, industry pages, and voice/language
+pages through `/api/admin/content*`. Open a record to edit its content and SEO
+metadata, use the block/form editor or JSON view, and save a working draft.
+Saving a published page leaves its current public version unchanged. **Publish**
+validates and replaces the public version; **Archive / unpublish** takes it offline.
+The last ten published versions can be restored into the editor.
+
+**Preview saved draft** opens the actual landing template using a signed,
+five-minute preview link. Save unsaved edits before previewing. Backend `SITE_URL`
+must point to the deployed landing renderer; a static-only landing deployment
+cannot render these previews. Publication and archive changes reach public caches
+within a minute. Concurrent saves produce a conflict instead of overwriting edits.
+
+New blog posts can be written manually. New SEO pages start with a reference
+structure that must be reviewed and rewritten before publication. Migrated JSX
+blogs use editable HTML to preserve their custom layouts; clear the HTML body to
+replace it with typed section blocks. Unsafe HTML is removed by the backend.
+
+AI generation is available for blogs, comparisons and workflow pages. The admin
+submits a background job and polls its status, avoiding the BFF's 30-second timeout.
+The backend requires `GEMINI_API_KEY`. Jobs and resulting drafts are persisted;
+an interrupted worker is reported as failed after five minutes. Check the content
+list before retrying an interrupted job. Generation does not publish automatically.
+
+Deploy the matching backend and landing changes before enabling this interface.
+The backend imports the packaged legacy content on startup; no legacy Node server,
+Supabase frontend credentials, or additional database tables are needed.

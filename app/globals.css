@@ -6321,3 +6321,18 @@ button:disabled {
   .product-share-donut { width: 100px; height: 100px; }
   .product-share-legend { font-size: 11px; gap: 8px; }
 }
+
+/* Editorial forms reuse the administration surfaces and controls. */
+.editorial-page h1 { overflow-wrap: anywhere; }
+.editorial-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin: 20px 0; }
+.editorial-toolbar label, .editorial-field { display: flex; flex-direction: column; gap: 7px; color: var(--ink); font-size: 12px; font-weight: 600; }
+.editorial-toolbar input, .editorial-toolbar select, .editorial-toolbar textarea, .editorial-field input:not([type=checkbox]), .editorial-field textarea { width: 100%; border: 1px solid var(--border-strong); border-radius: 7px; padding: 10px 12px; background: var(--surface); color: var(--ink); font: inherit; font-weight: 400; }
+.editorial-search { flex: 1; min-width: 240px; }
+.editorial-field { margin: 16px 0; }
+.editorial-field textarea { resize: vertical; min-height: 42px; line-height: 1.6; }
+.editorial-fieldset { border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin: 18px 0; min-width: 0; }
+.editorial-fieldset legend { color: var(--muted); font-size: 12px; padding: 0 7px; }
+.editorial-array-item { border-bottom: 1px solid var(--border); margin-bottom: 16px; padding-bottom: 16px; }
+.editorial-row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.editorial-json { font-family: monospace !important; }
+.editorial-preview { width: 100%; height: 760px; border: 1px solid var(--border); border-radius: 8px; background: white; }
