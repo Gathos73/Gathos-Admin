@@ -26,7 +26,7 @@ export function RelationField({
     const controller = new AbortController();
     async function load() {
       if (!field.referenceResource) return;
-      const result: SelectOption[] = [];
+      const result: SelectOption[] = [...(field.options ?? [])];
       const items: TransferItem[] = [];
       for (let page = 1; ; page += 1) {
         const response = await listResource(
@@ -46,7 +46,8 @@ export function RelationField({
         }
         result.push(
           ...response.rows
-            .filter((row) => field.referenceValue !== "code" || !row.retired_at)
+            .filter((row) => (field.referenceValue !== "code" || !row.retired_at)
+              && !field.options?.some((option) => option.value === String(row[field.referenceValue || "id"])))
             .map((row) => ({
               value: String(row[field.referenceValue || "id"]),
               label: `${row.name || row.display_name || row.code} (${row.code})${row.retired_at ? " · retired" : ""}`,
@@ -68,7 +69,7 @@ export function RelationField({
       }
     });
     return () => controller.abort();
-  }, [field.referenceResource, field.referenceValue]);
+  }, [field.referenceResource, field.referenceValue, field.options]);
 
   const multiple = field.kind === "relations";
 

@@ -243,7 +243,9 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
       return () => { active = false; };
     }
     getPublicPlanOptions()
-      .then((options) => { if (active) setPublicPlans(options); })
+      .then((options) => { if (active) setPublicPlans(resourceKey === "users"
+        ? [{ value: "free", label: "No access" }, ...options.filter((option) => option.value !== "free")]
+        : options); })
       .catch(() => { if (active) setPlanOptionsError("Unable to load public plans. Reload the page to try again."); });
     return () => { active = false; };
   }, [hasPlanFilter, resourceKey]);

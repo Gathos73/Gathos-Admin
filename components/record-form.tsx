@@ -94,6 +94,8 @@ function fieldPayloadValue(
 }
 
 function readOnlyRelationLabel(field: ResourceField, record: ResourceRecord | undefined, value: string): string {
+  const option = field.options?.find((option) => option.value === value);
+  if (option) return option.label;
   // Names for referenced rows ship with the record (e.g. product_id -> product_name).
   const base = field.name.replace(/_id$/, "");
   const name = record?.[`${base}_name`];

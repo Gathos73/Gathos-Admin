@@ -58,6 +58,9 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
         referenceResource: "plans",
         referenceValue: "code",
         defaultValue: "free",
+        required: true,
+        options: [{ value: "free", label: "No access" }],
+        help: "Select No access to remove the current entitlement. Access history is retained.",
       },
       {
         name: "is_superuser",

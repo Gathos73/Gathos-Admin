@@ -110,7 +110,8 @@ test(`${resourceKey}: inputs only load rows on submit, without server navigation
     assert.equal(input('Filter value').props.children[1][0].props.children, 'Complimentary');
   }
   await change('Filter field', planField);
-  assert.equal(input('Filter value').props.children[1][0].props.children, 'Team Access');
+  assert.equal(input('Filter value').props.children[1][0].props.children,
+    resourceKey === 'users' ? 'No access' : 'Team Access');
   await change('Filter value', 'team_v2');
   assert.equal(navigations.length, 0);
   assert.equal(requests.length, 0);
