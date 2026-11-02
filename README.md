@@ -223,3 +223,29 @@ list before retrying an interrupted job. Generation does not publish automatical
 Deploy the matching backend and landing changes before enabling this interface.
 The backend imports the packaged legacy content on startup; no legacy Node server,
 Supabase frontend credentials, or additional database tables are needed.
+
+## Record search and filters
+
+Record lists use a submitted search bar (`Enter` or the search icon; `/` focuses
+search), quick filter tabs, and a right-hand Filters panel. Panel changes and
+Reset stay local until **Apply filters**. Closing the panel discards its draft.
+Quick tabs and **Clear all** apply immediately. Applying resets pagination,
+retains sorting, and updates the URL without a server navigation. Search and
+filters remain combined while paging or sorting. Filter option catalogs load
+with the page; editing controls and opening the panel do not fetch records.
+
+Resources and Accounts & access also include creation-date ranges in local time
+(the upper bound is exclusive), plus category-specific filters:
+
+- Plans: visibility, priority support, billing interval, availability.
+- Subscriptions: status, plan, source.
+- Products: availability, user retries.
+- Generations: status, product, plan.
+- Users: plan, superuser, suspension, complimentary access.
+- API keys: owner ID, product type, active status.
+- Priority support: status, product, owner ID.
+
+Deploy the matching backend with this admin version. Combined criteria use the
+`filters` JSON query parameter; the backend validates public columns and values
+and applies all predicates before counts and pagination. Legacy single-filter
+and generation filter URLs remain supported. No database migration is needed.

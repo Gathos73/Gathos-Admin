@@ -147,6 +147,7 @@ export interface ResourceQuery {
   descending: boolean;
   search?: string;
   searchField?: string;
+  filters?: Record<string, string>;
   filterBy?: string;
   filterValue?: string;
   plan?: string;

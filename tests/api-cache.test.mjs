@@ -129,3 +129,25 @@ test('overview refresh fetches fresh usage and service status counts together', 
   assert.equal(refreshed.total_generations, 2);
   assert.equal(refreshed.points[0].status_breakdown.image.succeeded, 2);
 });
+
+test('resource lists serialize combined filters and creation dates in a single request', async (t) => {
+  t.after(clearRequestCache);
+  const filters = { is_public: 'false', priority_support: 'true', retired_at__isnull: 'true' };
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async path => {
+    calls++;
+    const url = new URL(path, 'http://localhost');
+    assert.equal(url.pathname, '/api/backend/api/admin/resources/plans');
+    assert.deepEqual(JSON.parse(url.searchParams.get('filters')), filters);
+    assert.equal(url.searchParams.get('created_from'), '2026-10-01T00:00:00Z');
+    assert.equal(url.searchParams.get('created_to'), '2026-10-29T00:00:00Z');
+    assert.equal(url.searchParams.get('search'), 'Team');
+    return Response.json({ rows: [], pagination: { total: 0, has_more: false } });
+  });
+  await api.listResource('plans', {
+    page: 1, pageSize: 50, orderBy: 'created_at', descending: true,
+    filters, search: 'Team', searchField: 'display_name',
+    createdFrom: '2026-10-01T00:00:00Z', createdTo: '2026-10-29T00:00:00Z',
+  });
+  assert.equal(calls, 1);
+});

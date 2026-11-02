@@ -96,6 +96,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
     ],
     filters: [
       { name: "plan", label: "Plan", options: [] },
+      { name: "is_superuser", label: "Superuser", options: [{ label: "Yes", value: "true" }, { label: "No", value: "false" }] },
       {
         name: "is_suspended",
         label: "Suspended",
@@ -177,6 +178,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
       { label: "Type", value: "type" },
     ],
     filters: [
+      { name: "user_id", label: "User ID" },
       {
         name: "type",
         label: "Type",
@@ -447,6 +449,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
       { label: "Plan", value: "plan" },
     ],
     filters: [
+      { name: "status", label: "Status", options: ["received", "validating", "waiting_capacity", "queued", "leased", "running", "retry_wait", "cancel_requested", "lease_expired", "orphaned", "submission_unknown", "succeeded", "failed", "cancelled", "expired"].map((value) => ({ value, label: value.replaceAll("_", " ") })) },
       { name: "type", label: "Type", referenceResource: "products" },
       { name: "plan", label: "Plan", options: [] },
     ],
@@ -523,7 +526,7 @@ export const RESOURCE_CONFIGS: Record<ResourceKey, ResourceConfig> = {
         ],
       },
       {
-        name: "product",
+        name: "product_code",
         label: "Product",
         referenceResource: "products",
       },

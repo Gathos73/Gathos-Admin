@@ -15,7 +15,10 @@ export const CATALOG_CONFIGS: Record<"products" | "plans" | "plan_products" | "p
       { name: "output_schema", label: "Output JSON Schema", kind: "json", jsonObject: true, defaultValue: {} },
       { name: "default_max_attempts", label: "Maximum attempts", kind: "number", min: 1, defaultValue: 3 },
       { name: "allows_user_retry", label: "Allow user retries", kind: "boolean", defaultValue: true }],
-    searchFields: [{ label: "Code", value: "code" }, { label: "Name", value: "name" }], filters: [], mutations: { basePath: "/catalog/products" },
+    searchFields: [{ label: "Code", value: "code" }, { label: "Name", value: "name" }], filters: [
+      { name: "retired_at__isnull", label: "Availability", options: [{ label: "Available", value: "true" }, { label: "Retired", value: "false" }] },
+      { name: "allows_user_retry", label: "User retries", options: [{ label: "Allowed", value: "true" }, { label: "Disabled", value: "false" }] },
+    ], mutations: { basePath: "/catalog/products" },
   },
   product_routes: {
     ...base, key: "product_routes", label: "Product routes", labelSingular: "product route",
@@ -53,7 +56,12 @@ export const CATALOG_CONFIGS: Record<"products" | "plans" | "plan_products" | "p
       { name: "plan_fixed_window_limit", label: "Plan fixed-window limit", kind: "number", placeholder: "e.g. 1000 (blank: unlimited)", nullable: true, min: 1, help: "Maximum accepted generations per user across all products in each shared 4-hour UTC window. Product limits also apply. Leave blank for no plan-wide window limit." },
       { name: "plan_queue_depth_limit", label: "Plan queue depth limit", kind: "number", placeholder: "e.g. 20 (blank: unlimited)", nullable: true, min: 1, help: "Max generations queued (not yet accepted) across all products. Leave blank for unlimited." },
       { name: "plan_concurrency_limit", label: "Plan concurrency limit", kind: "number", placeholder: "e.g. 5 (blank: unlimited)", nullable: true, min: 1, help: "Max concurrent active accepted generations across all products. Leave blank for unlimited." }],
-    searchFields: [{ label: "Code", value: "code" }, { label: "Name", value: "display_name" }], filters: [{ name: "is_public", label: "Public", options: [{ label: "Public", value: "true" }, { label: "Private", value: "false" }] }], mutations: { basePath: "/catalog/plans" },
+    searchFields: [{ label: "Code", value: "code" }, { label: "Name", value: "display_name" }], filters: [
+      { name: "is_public", label: "Visibility", options: [{ label: "Public", value: "true" }, { label: "Private", value: "false" }] },
+      { name: "priority_support", label: "Priority support", options: [{ label: "Yes", value: "true" }, { label: "No", value: "false" }] },
+      { name: "billing_interval", label: "Billing interval", options: ["none", "month", "quarter", "year", "custom"].map(option) },
+      { name: "retired_at__isnull", label: "Availability", options: [{ label: "Available", value: "true" }, { label: "Retired", value: "false" }] },
+    ], mutations: { basePath: "/catalog/plans" },
   },
   plan_products: {
     ...base, key: "plan_products", label: "Plan products", labelSingular: "plan product", canCreate: false, canDelete: false,

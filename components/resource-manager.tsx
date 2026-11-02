@@ -2,7 +2,7 @@
 
 import { clearRequestCache } from "@/lib/request-cache";
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
@@ -27,7 +27,7 @@ import {
 import { getResourceConfig } from "../lib/resources";
 import type { JsonObject, ResourceKey, ResourceListResponse, ResourceRecord, SelectOption } from "../lib/types";
 import { ConfirmDialog } from "./confirm-dialog";
-import { GenerationFilters } from "./generation-filters";
+import { ResourceFilters } from "./resource-filters";
 import { DataTable } from "./data-table";
 import {
   AlertIcon,
@@ -35,7 +35,6 @@ import {
   DeleteIcon,
   PlusIcon,
   RefreshIcon,
-  SearchIcon,
 } from "./icons";
 import { recordLabel } from "../lib/record-label";
 import { RecordForm } from "./record-form";
@@ -131,6 +130,12 @@ function SecretDialog({ secret, copied, onCopy, onClose }: SecretDialogProps) {
 
 export function ResourceManager({ resourceKey, initialData }: { resourceKey: ResourceKey; initialData?: ResourceListResponse | null }) {
   const config = getResourceConfig(resourceKey);
+  const hasCreationDateFilter = ["products", "plans", "entitlements", "generations", "users", "api_keys", "priority_support_requests"].includes(resourceKey);
+  const quickFilterNames: Partial<Record<ResourceKey, string>> = {
+    products: "retired_at__isnull", plans: "is_public", entitlements: "status", generations: "status",
+    users: "is_suspended", api_keys: "is_active", priority_support_requests: "status",
+  };
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -167,13 +172,26 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
 
   const plan = resourceKey === "generations" ? searchParams.get("plan") ?? (filterBy === "plan" ? filterValue : "") : "";
   const product = resourceKey === "generations" ? searchParams.get("product") ?? (filterBy === "type" ? filterValue : "") : "";
-  const createdFrom = resourceKey === "generations" ? searchParams.get("created_from") ?? "" : "";
-  const createdTo = resourceKey === "generations" ? searchParams.get("created_to") ?? "" : "";
+  const createdFrom = hasCreationDateFilter ? searchParams.get("created_from") ?? "" : "";
+  const createdTo = hasCreationDateFilter ? searchParams.get("created_to") ?? "" : "";
+  const serializedFilters = searchParams.get("filters") ?? "";
+  const filters = useMemo<Record<string, string>>(() => {
+    try {
+      const parsed = JSON.parse(serializedFilters || "{}");
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+      return Object.fromEntries(config.filters.flatMap((filter) => typeof parsed[filter.name] === "string" && parsed[filter.name] ? [[filter.name, parsed[filter.name]]] : []));
+    } catch { return {}; }
+  }, [config.filters, serializedFilters]);
+  const panelFilters = { ...filters };
+  if (filterBy && hasFilterValue) panelFilters[filterBy] = filterValue;
+  if (plan) panelFilters.plan = plan;
+  if (product) panelFilters.type = product;
 
   const [refreshVersion, setRefreshVersion] = useState(0);
   const requestKey = JSON.stringify({
     descending,
     plan, product, createdFrom, createdTo,
+    filters,
     filterBy,
     filterValue,
     hasFilterValue,
@@ -201,13 +219,6 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
   const total = loading ? 0 : loadState.total;
   const loadError = loading ? null : loadState.error;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const appliedDraft = { search, searchField, filterBy, filterValue };
-  const draftKey = JSON.stringify({ resourceKey, ...appliedDraft });
-  const [draftOverride, setDraftOverride] = useState<{ key: string; values: typeof appliedDraft } | null>(null);
-  const draft = draftOverride?.key === draftKey ? draftOverride.values : appliedDraft;
-  const updateDraft = (updates: Partial<typeof appliedDraft>) => {
-    setDraftOverride({ key: draftKey, values: { ...draft, ...updates } });
-  };
   const [productOptions, setProductOptions] = useState<SelectOption[] | null>(null);
   const [productOptionsError, setProductOptionsError] = useState("");
   const hasProductFilter = config.filters.some((filter) => filter.referenceResource === "products");
@@ -234,7 +245,7 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
   const hasPlanFilter = config.filters.some((filter) => filter.name === "plan");
 
   useEffect(() => {
-    if ((!hasPlanFilter && resourceKey !== "entitlements") || resourceKey === "generations") return;
+    if (!hasPlanFilter && resourceKey !== "entitlements") return;
     let active = true;
     if (resourceKey === "entitlements") {
       getSubscriptionFilterOptions()
@@ -338,7 +349,7 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
         pageSize,
         orderBy,
         descending,
-        plan, product, createdFrom, createdTo,
+        plan, product, createdFrom, createdTo, filters,
         search: search || undefined,
         searchField: search ? searchField : undefined,
         filterBy: filterBy && hasFilterValue ? filterBy : undefined,
@@ -369,7 +380,7 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
       active = false;
       controller.abort();
     };
-  }, [plan, product, createdFrom, createdTo, descending, filterBy, filterValue, hasFilterValue, loadState.requestKey, orderBy, page, pageSize, requestKey, resourceKey, search, searchField]);
+  }, [filters, plan, product, createdFrom, createdTo, descending, filterBy, filterValue, hasFilterValue, loadState.requestKey, orderBy, page, pageSize, requestKey, resourceKey, search, searchField]);
 
   const refresh = () => { clearRequestCache(); setRefreshVersion((version) => version + 1); };
 
@@ -384,32 +395,6 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
   const closeCreate = () => {
     setDrawer({ mode: "closed" });
     if (customPlanUserId) replaceParameters({ create_for_user: null });
-  };
-
-  const submitSearch = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    replaceParameters({
-      q: draft.search.trim() || null,
-      search_field: draft.search.trim() ? draft.searchField : null,
-      page: null,
-    });
-  };
-
-  const activeFilter = config.filters.find((filter) => filter.name === draft.filterBy);
-  const filterOptions = resourceKey === "entitlements" && activeFilter
-    ? subscriptionOptions?.[activeFilter.name as keyof SubscriptionFilterOptions] ?? []
-    : activeFilter?.referenceResource === "products" ? productOptions ?? [] : activeFilter?.name === "plan" ? publicPlans ?? [] : activeFilter?.options;
-  const filterOptionsLoading = resourceKey === "entitlements"
-    ? subscriptionOptions === null
-    : activeFilter?.referenceResource === "products" ? productOptions === null : draft.filterBy === "plan" && publicPlans === null;
-  const applyFilter = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (draft.filterBy && !draft.filterValue.trim()) return;
-    replaceParameters({
-      filter_by: draft.filterBy || null,
-      filter_value: draft.filterBy ? draft.filterValue.trim() : null,
-      page: null,
-    });
   };
 
   const sort = (column: string) => {
@@ -529,7 +514,7 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
     <div className="resource-manager">
       <div
         className="resource-manager-content"
-        inert={drawerOpen || dialogOpen ? true : undefined}
+        inert={drawerOpen || dialogOpen || filtersOpen ? true : undefined}
       >
       <header className="resource-header">
         <div>
@@ -552,107 +537,29 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
       </header>
 
       <section className="resource-panel">
-        <div className="resource-toolbar">
-          {resourceKey === "generations" ? <GenerationFilters
-            key={JSON.stringify({ search, searchField, plan, product, createdFrom, createdTo })}
-            initial={{ search, searchField, plan, product, createdFrom, createdTo }}
-            searchFields={config.searchFields}
-            onApply={(filters) => replaceParameters({
-              q: filters.search || null, search_field: filters.searchField,
-              plan: filters.plan || null, product: filters.product || null,
-              created_from: filters.createdFrom || null, created_to: filters.createdTo || null,
-              filter_by: null, filter_value: null, page: null,
-            })}
-          /> : <>
-          <form className="search-form" onSubmit={submitSearch}>
-            <span aria-hidden="true" className="search-prefix">
-              <SearchIcon size={16} />
-            </span>
-            <input
-              aria-label={`Search ${config.label}`}
-              onChange={(event) => updateDraft({ search: event.target.value })}
-              placeholder={`Search ${config.label.toLowerCase()}…`}
-              type="search"
-              value={draft.search}
-            />
-            {config.searchFields.length > 1 ? (
-              <select
-                aria-label="Search field"
-                onChange={(event) => updateDraft({ searchField: event.target.value })}
-                value={draft.searchField}
-              >
-                {config.searchFields.map((field) => (
-                  <option key={field.value} value={field.value}>
-                    {field.label}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-            <button className="button button--secondary" type="submit">
-              Search
-            </button>
-          </form>
-
-          {config.filters.length > 0 ? (
-            <form className="filter-form" onSubmit={applyFilter}>
-              <select
-                aria-label="Filter field"
-                onChange={(event) => {
-                  updateDraft({ filterBy: event.target.value, filterValue: "" });
-                }}
-                value={draft.filterBy}
-              >
-                <option value="">Filter by…</option>
-                {config.filters.map((filter) => (
-                  <option key={filter.name} value={filter.name}>
-                    {filter.label}
-                  </option>
-                ))}
-              </select>
-              {filterOptions ? (
-                <select
-                  aria-label="Filter value"
-                  disabled={!draft.filterBy || filterOptionsLoading}
-                  onChange={(event) => updateDraft({ filterValue: event.target.value })}
-                  value={draft.filterValue}
-                >
-                  <option value="">{planOptionsError || productOptionsError ? "Options unavailable" : filterOptionsLoading ? "Loading options…" : "Choose…"}</option>
-                  {filterOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  aria-label="Filter value"
-                  disabled={!draft.filterBy}
-                  onChange={(event) => updateDraft({ filterValue: event.target.value })}
-                  placeholder="Exact value"
-                  value={draft.filterValue}
-                />
-              )}
-              <button className="button button--secondary" disabled={draft.filterBy ? !draft.filterValue.trim() : !filterBy} type="submit">
-                Apply
-              </button>
-              {activeFilter?.referenceResource === "products" && productOptionsError ? <span role="alert">{productOptionsError}</span> : null}
-              {(resourceKey === "entitlements" || draft.filterBy === "plan") && planOptionsError ? <span role="alert">{planOptionsError}</span> : null}
-            </form>
-          ) : null}
-
-          {draft.search || draft.filterBy || search || filterBy ? (
-            <button
-              className="button button--ghost"
-              onClick={() =>
-                updateDraft({ search: "", searchField: config.searchFields[0]?.value ?? "", filterBy: "", filterValue: "" })
-              }
-              type="button"
-            >
-              Clear
-            </button>
-          ) : null}
-          </>}
-        </div>
+        <ResourceFilters
+          key={JSON.stringify({ resourceKey, search, searchField, panelFilters, createdFrom, createdTo })}
+          label={config.label}
+          showCreatedDate={hasCreationDateFilter}
+          quickFilterName={quickFilterNames[resourceKey]}
+          searchFields={config.searchFields}
+          applied={{ search, searchField, filters: panelFilters, createdFrom, createdTo }}
+          open={filtersOpen}
+          onOpenChange={setFiltersOpen}
+          filters={config.filters.map((filter) => ({ ...filter, options:
+            resourceKey === "entitlements" && ["status", "plan_code", "source"].includes(filter.name)
+              ? subscriptionOptions?.[filter.name as keyof SubscriptionFilterOptions] ?? filter.options
+              : filter.referenceResource === "products" ? productOptions ?? filter.options ?? []
+              : filter.name === "plan" ? publicPlans ?? filter.options : filter.options,
+          }))}
+          optionsError={planOptionsError || productOptionsError}
+          onApply={(next) => replaceParameters({
+            q: next.search || null, search_field: next.search ? next.searchField : null,
+            filters: Object.keys(next.filters).length ? JSON.stringify(next.filters) : null,
+            created_from: next.createdFrom || null, created_to: next.createdTo || null,
+            plan: null, product: null, filter_by: null, filter_value: null, page: null,
+          })}
+        />
 
         {config.canBulkDelete && selectedIds.length > 0 ? (
           <div className="selection-toolbar">

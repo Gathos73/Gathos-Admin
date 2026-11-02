@@ -186,11 +186,12 @@ function listPath(resource: ResourceKey, query: ResourceQuery): string {
     parameters.set("filter_by", query.filterBy);
     parameters.set("filter_value", query.filterValue);
   }
+  if (query.filters && Object.keys(query.filters).length) parameters.set("filters", JSON.stringify(query.filters));
+  if (query.createdFrom) parameters.set("created_from", query.createdFrom);
+  if (query.createdTo) parameters.set("created_to", query.createdTo);
   if (resource === "generations") {
     if (query.plan) parameters.set("plan", query.plan);
     if (query.product) parameters.set("product", query.product);
-    if (query.createdFrom) parameters.set("created_from", query.createdFrom);
-    if (query.createdTo) parameters.set("created_to", query.createdTo);
   }
   return `${BACKEND_PROXY}/api/admin/resources/${resource}?${parameters.toString()}`;
 }
