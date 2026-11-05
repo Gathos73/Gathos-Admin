@@ -10,7 +10,7 @@ import {
   createResource,
   deleteResource,
   listResource,
-  getPublicPlanOptions,
+  getPlanFilterOptions,
   getSubscriptionFilterOptions,
   type SubscriptionFilterOptions,
 } from "../lib/api";
@@ -174,7 +174,7 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
   const product = resourceKey === "generations" ? searchParams.get("product") ?? (filterBy === "type" ? filterValue : "") : "";
   const createdFrom = hasCreationDateFilter ? searchParams.get("created_from") ?? "" : "";
   const createdTo = hasCreationDateFilter ? searchParams.get("created_to") ?? "" : "";
-  const serializedFilters = searchParams.get("filters") ?? "";
+  const serializedFilters = searchParams.get("filters") ?? JSON.stringify(config.defaultFilters ?? {});
   const filters = useMemo<Record<string, string>>(() => {
     try {
       const parsed = JSON.parse(serializedFilters || "{}");
@@ -239,7 +239,7 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
     void load().catch(() => { if (!controller.signal.aborted) setProductOptionsError("Unable to load products. Reload the page to try again."); });
     return () => controller.abort();
   }, [hasProductFilter]);
-  const [publicPlans, setPublicPlans] = useState<SelectOption[] | null>(null);
+  const [planFilterOptions, setPlanFilterOptions] = useState<SelectOption[] | null>(null);
   const [subscriptionOptions, setSubscriptionOptions] = useState<SubscriptionFilterOptions | null>(null);
   const [planOptionsError, setPlanOptionsError] = useState("");
   const hasPlanFilter = config.filters.some((filter) => filter.name === "plan");
@@ -253,11 +253,11 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
         .catch(() => { if (active) setPlanOptionsError("Unable to load subscription filters. Reload the page to try again."); });
       return () => { active = false; };
     }
-    getPublicPlanOptions()
-      .then((options) => { if (active) setPublicPlans(resourceKey === "users"
+    getPlanFilterOptions()
+      .then((options) => { if (active) setPlanFilterOptions(resourceKey === "users"
         ? [{ value: "free", label: "No access" }, ...options.filter((option) => option.value !== "free")]
         : options); })
-      .catch(() => { if (active) setPlanOptionsError("Unable to load public plans. Reload the page to try again."); });
+      .catch(() => { if (active) setPlanOptionsError("Unable to load plans. Reload the page to try again."); });
     return () => { active = false; };
   }, [hasPlanFilter, resourceKey]);
   const [drawer, setDrawer] = useState<DrawerState>({ mode: "closed" });
@@ -550,12 +550,12 @@ export function ResourceManager({ resourceKey, initialData }: { resourceKey: Res
             resourceKey === "entitlements" && ["status", "plan_code", "source"].includes(filter.name)
               ? subscriptionOptions?.[filter.name as keyof SubscriptionFilterOptions] ?? filter.options
               : filter.referenceResource === "products" ? productOptions ?? filter.options ?? []
-              : filter.name === "plan" ? publicPlans ?? filter.options : filter.options,
+              : filter.name === "plan" ? planFilterOptions ?? filter.options : filter.options,
           }))}
           optionsError={planOptionsError || productOptionsError}
           onApply={(next) => replaceParameters({
             q: next.search || null, search_field: next.search ? next.searchField : null,
-            filters: Object.keys(next.filters).length ? JSON.stringify(next.filters) : null,
+            filters: Object.keys(next.filters).length > 0 || config.defaultFilters ? JSON.stringify(next.filters) : null,
             created_from: next.createdFrom || null, created_to: next.createdTo || null,
             plan: null, product: null, filter_by: null, filter_value: null, page: null,
           })}

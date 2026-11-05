@@ -9,13 +9,16 @@ const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.Modu
   .replaceAll('"./request-cache"', JSON.stringify(new URL('../lib/request-cache.ts', import.meta.url).href));
 const api = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 
-test('subscription filter options share one request and seed the public plan cache', async (t) => {
+test('subscription filter options share one request and seed the non-retired plan cache', async (t) => {
   globalThis.window = {};
   t.after(() => { delete globalThis.window; clearRequestCache(); });
   const isolated = await import(`data:text/javascript;base64,${Buffer.from(compiled + '\n// subscription options document').toString('base64')}`);
   const options = {
     status: [{ value: 'on_hold', label: 'On hold' }],
-    plan_code: [{ value: 'team_v2', label: 'Team Access' }],
+    plan_code: [
+      { value: 'team_v2', label: 'Team Access' },
+      { value: 'private_team', label: 'Private Team' },
+    ],
     source: [{ value: 'complimentary', label: 'Complimentary' }],
   };
   let calls = 0;
@@ -29,11 +32,11 @@ test('subscription filter options share one request and seed the public plan cac
   ]), [options, options]);
   clearRequestCache();
   assert.deepEqual(await isolated.getSubscriptionFilterOptions(), options);
-  assert.deepEqual(await isolated.getPublicPlanOptions(), options.plan_code);
+  assert.deepEqual(await isolated.getPlanFilterOptions(), options.plan_code);
   assert.equal(calls, 1);
 });
 
-test('public plan options paginate, deduplicate, and survive cache clears until a document reload', async (t) => {
+test('plan filter options include private plans, exclude retired plans, paginate and deduplicate', async (t) => {
   globalThis.window = {};
   t.after(() => { delete globalThis.window; clearRequestCache(); });
   let calls = 0;
@@ -42,31 +45,39 @@ test('public plan options paginate, deduplicate, and survive cache clears until 
   t.mock.method(globalThis, 'fetch', async (path) => {
     calls++;
     const params = new URL(path, 'http://localhost').searchParams;
-    assert.equal(params.get('filter_by'), 'is_public');
-    assert.equal(params.get('filter_value'), 'true');
+    assert.equal(params.has('filter_by'), false);
+    assert.deepEqual(JSON.parse(params.get('filters')), { retired_at__isnull: 'true' });
     const page = Number(params.get('page'));
     return Response.json({
       rows: page === 1 ? [
         { code: 'public_one', display_name: 'Team Access', is_public: true },
         { code: 'private_one', display_name: 'Private Access', is_public: false },
-      ] : [{ code: 'public_two', display_name: 'Creator Studio', is_public: true }],
+        { code: 'retired_public', display_name: 'Retired Public', is_public: true, retired_at: '2026-11-01' },
+        { code: 'retired_private', display_name: 'Retired Private', is_public: false, retired_at: '2026-11-01' },
+      ] : [
+        { code: 'public_one', display_name: 'Team Access', is_public: true },
+        { code: 'public_two', display_name: 'Creator Studio', is_public: true },
+        { code: 'private_two', display_name: 'Custom Access', is_public: false },
+      ],
       pagination: { has_more: page === 1 },
     });
   });
   const expected = [
     { value: 'public_one', label: 'Team Access' },
+    { value: 'private_one', label: 'Private Access' },
     { value: 'public_two', label: 'Creator Studio' },
+    { value: 'private_two', label: 'Custom Access' },
   ];
-  const results = await Promise.all([api.getPublicPlanOptions(), api.getPublicPlanOptions()]);
+  const results = await Promise.all([api.getPlanFilterOptions(), api.getPlanFilterOptions()]);
   assert.deepEqual(results, [expected, expected]);
   assert.equal(calls, 2);
   clearRequestCache();
   now += 24 * 60 * 60 * 1000;
-  assert.deepEqual(await api.getPublicPlanOptions(), expected);
+  assert.deepEqual(await api.getPlanFilterOptions(), expected);
   assert.equal(calls, 2);
   // A fresh module represents the memory reset on a full document reload.
   const reloaded = await import(`data:text/javascript;base64,${Buffer.from(compiled + '\n// reloaded document').toString('base64')}`);
-  assert.deepEqual(await reloaded.getPublicPlanOptions(), expected);
+  assert.deepEqual(await reloaded.getPlanFilterOptions(), expected);
   assert.equal(calls, 4);
 });
 

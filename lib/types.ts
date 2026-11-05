@@ -124,6 +124,8 @@ export interface ResourceConfig {
   primaryKey: string;
   defaultOrder: string;
   defaultDescending: boolean;
+  /** Applied on list entry when the URL has no explicit filters parameter. */
+  defaultFilters?: Record<string, string>;
   /** Django-style list_display: reorder, add, or remove descriptors here. */
   listDisplay: ResourceColumn[];
   /** Optional Django-style detail field order; unspecified record fields follow it. */

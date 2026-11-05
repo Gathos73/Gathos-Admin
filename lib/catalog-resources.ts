@@ -36,6 +36,7 @@ export const CATALOG_CONFIGS: Record<"products" | "plans" | "plan_products" | "p
   },
   plans: {
     ...base, key: "plans", label: "Plans", labelSingular: "plan",
+    defaultFilters: { retired_at__isnull: "true" },
     description: "Shared plan access and pricing. Changes apply directly to everyone assigned to the plan. Create a private plan for individual exceptions. Deleting retires the plan.",
     listDisplay: [{ name: "code", label: "Code", sortable: true }, { name: "display_name", label: "Name", sortable: true }, { name: "price_minor", label: "Price (minor units)", kind: "number", sortable: true }, { name: "currency", label: "Currency" }, { name: "is_public", label: "Public", kind: "boolean", sortable: true }, { name: "priority_support", label: "Priority support", kind: "boolean", sortable: true }, { name: "retired_at", label: "Retired", kind: "date" }],
     fields: [{ ...code, placeholder: "e.g. creator_custom", help: "Unique plan identifier using lowercase letters, numbers and underscores. Cannot be changed after creation." },

@@ -26,6 +26,31 @@ function token(payload) {
   return Buffer.from(JSON.stringify({ data, signature })).toString('base64url');
 }
 
+test('server resource reads forward default filters to the backend', async (t) => {
+  const filters = { retired_at__isnull: 'true' };
+  const response = { rows: [], pagination: { total: 0 } };
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async path => {
+    calls++;
+    const url = new URL(path);
+    assert.equal(url.pathname, '/api/admin/resources/plans');
+    assert.deepEqual(JSON.parse(url.searchParams.get('filters')), filters);
+    return Response.json(response);
+  });
+  const loaded = { exports: {} };
+  const dependencies = {
+    'server-only': {}, react: { cache: fn => fn },
+    'next/headers': { cookies: async () => ({ get: () => ({ value: 'test-session' }) }) },
+    'next/navigation': {}, '@/lib/session-token': {},
+    '@/lib/cookie-names': { cookieName: name => name },
+  };
+  new Function('require', 'module', 'exports', compiled)(id => dependencies[id], loaded, loaded.exports);
+  assert.deepEqual(await loaded.exports.getServerResourceList('plans', {
+    page: 1, pageSize: 50, orderBy: 'created_at', descending: true, filters,
+  }), response);
+  assert.equal(calls, 1);
+});
+
 test('signed admin claims cannot bypass current backend authorization', async (t) => {
   const originalSecret = process.env.SESSION_SECRET;
   process.env.SESSION_SECRET = 'test-secret';

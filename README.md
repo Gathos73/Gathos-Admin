@@ -245,6 +245,10 @@ Resources and Accounts & access also include creation-date ranges in local time
 - API keys: owner ID, product type, active status.
 - Priority support: status, product, owner ID.
 
+Plans opens with Availability set to Available (non-retired). Choosing All or
+Retired explicitly overrides that default, including when sharing or reloading
+the resulting URL. Navigating back to `/plans` restores the default.
+
 Deploy the matching backend with this admin version. Combined criteria use the
 `filters` JSON query parameter; the backend validates public columns and values
 and applies all predicates before counts and pagination. Legacy single-filter

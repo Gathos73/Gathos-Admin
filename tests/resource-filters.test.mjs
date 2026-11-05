@@ -21,10 +21,12 @@ const { RESOURCE_CONFIGS } = compile(await readFile(new URL('../lib/resources.ts
 });
 
 for (const resourceKey of ['users', 'entitlements', 'plans', 'products', 'generations', 'api_keys', 'priority_support_requests']) {
-  test(`${resourceKey}: draft edits, reset and dismiss never load records; explicit apply loads once`, async (t) => {
+ for (const query of resourceKey === 'plans' ? ['', 'page=3', 'filters={}', 'filters={"retired_at__isnull":"false"}'] : ['page=3']) {
+  test(`${resourceKey} (${query || 'default'}): draft edits, reset and dismiss never load records; explicit apply loads once`, async (t) => {
     const config = RESOURCE_CONFIGS[resourceKey];
     const instances = new Map();
-    let current, cursor, effects = [], params = new URLSearchParams('page=3');
+    let current, cursor, effects = [], params = new URLSearchParams(query);
+    const initialFilters = params.has('filters') ? JSON.parse(params.get('filters')) : config.defaultFilters ?? {};
     const requests = [], navigations = [];
     const data = { rows: [], pagination: { total: 0, has_more: false } };
     globalThis.document = { body: { style: {} }, addEventListener() {}, removeEventListener() {} };
@@ -62,10 +64,16 @@ for (const resourceKey of ['users', 'entitlements', 'plans', 'products', 'genera
       '@/lib/request-cache': { clearRequestCache() {} },
       '../lib/api': {
         listResource: async (resource, query) => { requests.push({ resource, query }); return data; },
-        getPublicPlanOptions: async () => [{ value: 'team_v2', label: 'Team Access' }],
+        getPlanFilterOptions: async () => [
+          { value: 'team_v2', label: 'Team Access' },
+          { value: 'private_team', label: 'Private Team' },
+        ],
         getSubscriptionFilterOptions: async () => ({
           status: [{ value: 'on_hold', label: 'On hold' }],
-          plan_code: [{ value: 'team_v2', label: 'Team Access' }],
+          plan_code: [
+            { value: 'team_v2', label: 'Team Access' },
+            { value: 'private_team', label: 'Private Team' },
+          ],
           source: [{ value: 'complimentary', label: 'Complimentary' }],
         }),
       },
@@ -111,6 +119,19 @@ for (const resourceKey of ['users', 'entitlements', 'plans', 'products', 'genera
     const initialRequests = requests.length;
     const filter = config.filters.find(filter => filter.options?.length) ?? config.filters[0];
     await click(toggle());
+    if (resourceKey === 'plans') {
+      assert.equal(input('Availability').props.value, initialFilters.retired_at__isnull ?? '');
+    }
+    if (['users', 'generations', 'entitlements'].includes(resourceKey)) {
+      const planSelect = input('Plan');
+      assert.ok(find(node => node.type === 'option' && node.props.value === 'private_team', planSelect));
+      if (resourceKey === 'users') {
+        assert.equal(find(node => node.type === 'option' && node.props.value === 'free', planSelect).props.children, 'No access');
+      }
+      await change('Plan', 'private_team');
+      assert.equal(requests.length, initialRequests);
+      await change('Plan', '');
+    }
     const firstOption = field => find(node => node.type === 'option' && node.props.value, input(field.label))?.props.value ?? '00000000-0000-0000-0000-000000000000';
     const value = firstOption(filter);
     await change(filter.label, value);
@@ -130,7 +151,7 @@ for (const resourceKey of ['users', 'entitlements', 'plans', 'products', 'genera
     await submit('resource-filter-form');
     assert.equal(rowRequests().length, 1);
     assert.equal(params.has('page'), false);
-    assert.deepEqual(rowRequests()[0].query.filters, { [filter.name]: value, [secondFilter.name]: secondValue });
+    assert.deepEqual(rowRequests()[0].query.filters, { ...initialFilters, [filter.name]: value, [secondFilter.name]: secondValue });
     assert.equal(rowRequests()[0].query.createdFrom, new Date('2026-10-01T00:00').toISOString());
     assert.equal(toggle().props['aria-expanded'], false);
     await change('Search field', config.searchFields[1].value);
@@ -146,6 +167,7 @@ for (const resourceKey of ['users', 'entitlements', 'plans', 'products', 'genera
     await submit('resource-filter-form');
     assert.equal(rowRequests().length, 3);
     assert.deepEqual(rowRequests()[2].query.filters, {});
+    if (resourceKey === 'plans') assert.equal(params.get('filters'), '{}');
     assert.equal(rowRequests()[2].query.createdFrom, '');
     assert.equal(rowRequests()[2].query.search, 'Alice');
     await click(button('Clear all'));
@@ -158,4 +180,22 @@ for (const resourceKey of ['users', 'entitlements', 'plans', 'products', 'genera
     assert.equal(rowRequests().length, 5);
     assert.equal(Object.keys(rowRequests()[4].query.filters).length, 1);
   });
+ }
 }
+
+test('Plans initial server render requests only non-retired records', async () => {
+  const calls = [];
+  const { default: ResourcePage } = compile(await readFile(new URL('../app/(admin)/[resource]/page.tsx', import.meta.url), 'utf8'), {
+    'react/jsx-runtime': require('react/jsx-runtime'),
+    '../../../lib/resources': { getResourceConfig: key => RESOURCE_CONFIGS[key], resourceKeyFromSlug: slug => slug },
+    '../../../lib/server-auth': { getServerResourceList: async (resource, query) => { calls.push({ resource, query }); return { rows: [], pagination: { total: 0 } }; } },
+  });
+  await ResourcePage({ params: Promise.resolve({ resource: 'plans' }), searchParams: Promise.resolve({}) });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].query.filters, { retired_at__isnull: 'true' });
+  // Explicit All/Retired URLs bypass the default server query and use their URL filters.
+  for (const filters of ['{}', '{"retired_at__isnull":"false"}']) {
+    await ResourcePage({ params: Promise.resolve({ resource: 'plans' }), searchParams: Promise.resolve({ filters }) });
+  }
+  assert.equal(calls.length, 1);
+});

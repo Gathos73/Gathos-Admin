@@ -50,6 +50,7 @@ export default async function ResourcePage({ params, searchParams }: ResourcePag
         pageSize: 50,
         orderBy: config.defaultOrder,
         descending: config.defaultDescending,
+        filters: config.defaultFilters,
       })
     : null;
 

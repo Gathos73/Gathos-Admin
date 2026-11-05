@@ -45,6 +45,9 @@ export async function getServerResourceList(
     order_by: query.orderBy,
     descending: String(query.descending),
   });
+  if (query.filters && Object.keys(query.filters).length) {
+    parameters.set("filters", JSON.stringify(query.filters));
+  }
   try {
     const response = await fetch(
       `${getBackendUrl()}/api/admin/resources/${resource}?${parameters.toString()}`,
