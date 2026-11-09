@@ -60,6 +60,7 @@ export interface ResourceField {
   integer?: boolean;
   minLength?: number;
   maxLength?: number;
+  valuePreview?: { prefix: string; suffix: string };
   /** Confirm another field without including this value in the request. */
   confirms?: string;
   step?: number;

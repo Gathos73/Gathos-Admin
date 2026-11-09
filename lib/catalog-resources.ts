@@ -10,7 +10,11 @@ export const CATALOG_CONFIGS: Record<"products" | "plans" | "plan_products" | "p
     ...base, key: "products", label: "Products", labelSingular: "product",
     description: "Generation capabilities and their input/output contracts. Used contracts are protected; deleting retires a product.",
     listDisplay: [{ name: "code", label: "Code", sortable: true }, { name: "name", label: "Name", sortable: true }, { name: "contract_version", label: "Version", kind: "number" }, { name: "retired_at", label: "Retired", kind: "date" }],
-    fields: [code, { name: "name", label: "Name", kind: "text", required: true }, { name: "description", label: "Description", kind: "textarea", nullable: true },
+    fields: [code, {
+      name: "key_tag", label: "API key tag", kind: "text", required: true, minLength: 3, maxLength: 3,
+      placeholder: "t2i", valuePreview: { prefix: "gth-", suffix: "-" },
+      help: "Enter three lowercase letters or digits. Changes apply to newly issued keys.",
+    }, { name: "name", label: "Name", kind: "text", required: true }, { name: "description", label: "Description", kind: "textarea", nullable: true },
       { name: "input_schema", label: "Input JSON Schema", kind: "json", jsonObject: true, defaultValue: {} },
       { name: "output_schema", label: "Output JSON Schema", kind: "json", jsonObject: true, defaultValue: {} },
       { name: "default_max_attempts", label: "Maximum attempts", kind: "number", min: 1, defaultValue: 3 },

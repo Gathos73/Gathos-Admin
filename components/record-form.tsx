@@ -327,6 +327,11 @@ export function RecordForm({
                   />
                 ) : null}
 
+                {field.valuePreview ? (
+                  <span className="form-help">
+                    Key prefix <code>{field.valuePreview.prefix}{String(values[field.name] || "…")}{field.valuePreview.suffix}</code>
+                  </span>
+                ) : null}
                 {field.help ? (
                   <span className="form-help" id={helpId}>
                     {field.help}
